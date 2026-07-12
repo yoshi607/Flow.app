@@ -90,7 +90,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   }
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-brand-50 dark:bg-neutral-950">
+    <div className="h-app-screen flex overflow-hidden bg-brand-50 dark:bg-neutral-950">
       {/* サイドバー（モバイルはドロワー / 全画面時は非表示） */}
       <div
         className={`fixed inset-y-0 left-0 z-30 w-64 transform transition-transform md:static md:translate-x-0 ${

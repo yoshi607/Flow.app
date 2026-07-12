@@ -41,6 +41,13 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
+/* 画面いっぱいの高さ。dvh 未対応の古い iOS でも高さ0にならないよう
+   まず vh でフォールバックしてから dvh で上書きする */
+.h-app-screen {
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* スクロールバーを控えめに */
 .thin-scroll::-webkit-scrollbar {
   width: 8px;

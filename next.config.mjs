@@ -2,12 +2,22 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
   dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === "development",
   workboxOptions: {
     disableDevLogs: true,
+    // ログイン状態によって内容が変わる HTML は常にネットワークを優先し、
+    // 古いキャッシュ（真っ白画面の原因になりうる）を出さないようにする。
+    runtimeCaching: [
+      {
+        urlPattern: ({ request }) => request.mode === "navigate",
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "html-pages",
+          networkTimeoutSeconds: 10,
+        },
+      },
+    ],
   },
 });
 
