@@ -263,6 +263,8 @@ export default function NoteEditor({
                 </span>
               ) : null;
             })()}
+          <div className="flex-1" />
+          <RichTextToolbar editor={editor} />
         </div>
       )}
 
@@ -310,9 +312,6 @@ export default function NoteEditor({
         placeholder="タイトル"
         className="bg-transparent px-4 pt-4 text-2xl font-semibold tracking-tight outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-600"
       />
-
-      {/* 書式ツールバー */}
-      {!trashed && <RichTextToolbar editor={editor} />}
 
       {/* 本文（リッチテキスト） */}
       <EditorContent editor={editor} className="flex min-h-0 flex-1 flex-col" />

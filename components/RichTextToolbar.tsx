@@ -20,10 +20,10 @@ const COLORS: { name: string; hex: string }[] = [
 ];
 
 const HEADINGS: { level: 0 | 1 | 2 | 3; icon: typeof IconParagraph; title: string }[] = [
-  { level: 0, icon: IconParagraph, title: "本文" },
   { level: 1, icon: IconHeading1, title: "見出し1" },
   { level: 2, icon: IconHeading2, title: "見出し2" },
   { level: 3, icon: IconHeading3, title: "見出し3" },
+  { level: 0, icon: IconParagraph, title: "テキスト" },
 ];
 
 export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
@@ -38,8 +38,8 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
-      {/* 見出し / 本文 */}
+    <div className="flex flex-wrap items-center gap-2">
+      {/* 見出し / テキスト */}
       <div className="flex items-center gap-0.5 rounded-lg bg-brand-100 p-0.5 dark:bg-neutral-800">
         {HEADINGS.map(({ level, icon: Icon, title }) => (
           <button
