@@ -14,11 +14,14 @@ export function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;");
 }
 
-// 改行区切りのプレーンテキストを段落(<p>)に変換する
+// 改行区切りのプレーンテキストを段落(<p>)に変換する。
+// 1行=1段落として分割する（<br>でまとめると、見出しが行単位ではなく
+// 段落単位で適用されるTiptapの仕様上、隣接行まで巻き込まれてしまうため）
 function textToParagraphs(text: string): string {
   return text
-    .split(/\n{2,}/)
-    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`)
+    .trim()
+    .split(/\n+/)
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
     .join("");
 }
 
