@@ -138,6 +138,19 @@ export const IconParagraph = ({ className = base }: P) => (
   </svg>
 );
 
+export const IconClip = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 10.5V17a5 5 0 0 1-10 0V6a3.5 3.5 0 0 1 7 0v9.5a2 2 0 0 1-4 0V8" />
+  </svg>
+);
+
+export const IconFile = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
+    <path d="M15 2v5h5" />
+  </svg>
+);
+
 export const IconSettings = ({ className = base }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />

@@ -63,3 +63,10 @@ export function displayTitle(title: string, body: string): string {
     .find((l) => l.trim());
   return firstLine ? firstLine.trim().slice(0, 40) : "無題のメモ";
 }
+
+// 添付ファイルのサイズ表示（例: 1.2 MB）
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import dynamic from "next/dynamic";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, Color } from "@tiptap/extension-text-style";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useNotes } from "@/lib/store";
-import { type Note } from "@/lib/types";
-import { shortNoteRemainingDays, trashRemainingDays } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { type Note, type Attachment } from "@/lib/types";
+import { shortNoteRemainingDays, trashRemainingDays, formatFileSize } from "@/lib/utils";
 import { toEditorHtml, toAppendedParagraphs } from "@/lib/richtext";
+import { listAttachments, uploadAttachment, deleteAttachment } from "@/lib/attachments";
 import RichTextToolbar from "./RichTextToolbar";
 
 // 録音ボタンを押した時だけ使うため遅延読み込みにし、メモを開く際の初期JSを減らす
@@ -18,6 +20,8 @@ import {
   IconBack,
   IconPin,
   IconMic,
+  IconClip,
+  IconFile,
   IconTrash,
   IconRestore,
   IconExpand,
@@ -42,6 +46,7 @@ export default function NoteEditor({
   standalone?: boolean;
 }) {
   const {
+    userId,
     folders,
     updateNote,
     setNoteType,
@@ -52,9 +57,41 @@ export default function NoteEditor({
   } = useNotes();
   const [recording, setRecording] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  const supabase = useMemo(() => createClient(), []);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const trashed = note.status === "trashed";
   const tags = note.tags ?? [];
+
+  // key={note.id} で都度マウントされるため、この effect は「ノートが
+  // 開かれるたび1回」だけ走る（他デバイスでの添付操作はRealtime対象外）
+  useEffect(() => {
+    listAttachments(supabase, note.id).then(setAttachments);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleFilesSelected(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    setUploading(true);
+    for (const file of files) {
+      try {
+        const attachment = await uploadAttachment(supabase, userId, note.id, file);
+        setAttachments((prev) => [...prev, attachment]);
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "添付に失敗しました");
+      }
+    }
+    setUploading(false);
+  }
+
+  async function handleDeleteAttachment(attachment: Attachment) {
+    setAttachments((prev) => prev.filter((a) => a.id !== attachment.id));
+    await deleteAttachment(supabase, attachment);
+  }
 
   // key={note.id} で親から都度マウントされるため、ノート切り替え時は
   // このエディタインスタンス自体が再生成される（setContentでの手動同期は不要）
@@ -177,6 +214,21 @@ export default function NoteEditor({
             >
               <IconPin filled={note.pinned} />
             </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="rounded-lg p-2 text-neutral-500 hover:bg-brand-100 disabled:opacity-50 dark:hover:bg-neutral-800"
+              title="ファイル・写真を添付"
+            >
+              <IconClip />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFilesSelected}
+            />
             <button
               onClick={() => setRecording(true)}
               className="rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
@@ -315,6 +367,67 @@ export default function NoteEditor({
 
       {/* 本文（リッチテキスト） */}
       <EditorContent editor={editor} className="flex min-h-0 flex-1 flex-col" />
+
+      {/* 添付ファイル */}
+      {attachments.length > 0 && (
+        <div className="thin-scroll flex flex-wrap gap-2 border-t border-brand-200/60 px-4 py-3 dark:border-neutral-800">
+          {attachments.map((a) =>
+            a.type === "image" ? (
+              <div
+                key={a.id}
+                className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-brand-100 dark:bg-neutral-800"
+              >
+                <a href={a.file_url} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={a.file_url}
+                    alt={a.file_name}
+                    className="h-full w-full object-cover"
+                  />
+                </a>
+                {!trashed && (
+                  <button
+                    onClick={() => handleDeleteAttachment(a)}
+                    title="削除"
+                    className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                  >
+                    <IconClose className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div
+                key={a.id}
+                className="flex max-w-[12rem] items-center gap-2 rounded-lg bg-brand-100 py-1.5 pl-3 pr-2 text-sm dark:bg-neutral-800"
+              >
+                <a
+                  href={a.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-w-0 items-center gap-2"
+                >
+                  <IconFile className="h-4 w-4 shrink-0 text-neutral-500" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{a.file_name}</span>
+                    <span className="block text-xs text-neutral-400">
+                      {formatFileSize(a.file_size)}
+                    </span>
+                  </span>
+                </a>
+                {!trashed && (
+                  <button
+                    onClick={() => handleDeleteAttachment(a)}
+                    title="削除"
+                    className="shrink-0 text-neutral-400 hover:text-red-600"
+                  >
+                    <IconClose className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ),
+          )}
+        </div>
+      )}
 
       {recording && (
         <VoiceRecorder

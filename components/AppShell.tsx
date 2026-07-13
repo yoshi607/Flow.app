@@ -77,7 +77,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   async function handleCreate() {
     const folderId = view.type === "folder" ? view.folderId : null;
     const tag = view.type === "tag" ? [view.tag] : undefined;
-    const note = await createNote({ folder_id: folderId, type: "long", tags: tag });
+    const note = await createNote({ folder_id: folderId, type: "short", tags: tag });
     if (note) setSelectedId(note.id);
   }
 

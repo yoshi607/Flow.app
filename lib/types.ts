@@ -32,6 +32,8 @@ export interface Attachment {
   note_id: string;
   file_url: string;
   file_path: string | null;
+  file_name: string;
+  file_size: number;
   type: string;
   created_at: string;
 }

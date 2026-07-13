@@ -159,7 +159,7 @@ export function NotesProvider({
 
   const createNote = useCallback(
     async (partial: Partial<Note> = {}) => {
-      const type: NoteType = partial.type ?? "long";
+      const type: NoteType = partial.type ?? "short";
       const insert = {
         user_id: userId,
         folder_id: partial.folder_id ?? null,
