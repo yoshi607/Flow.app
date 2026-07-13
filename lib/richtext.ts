@@ -25,10 +25,24 @@ function textToParagraphs(text: string): string {
     .join("");
 }
 
+// 修正前のバグで保存された、<br>で複数行がまとめられた段落/見出しを
+// 1行ずつの別ブロックに分割し直す（見出しの巻き込みバグの既存データ修復）
+function splitSoftBreaksIntoBlocks(html: string): string {
+  return html.replace(
+    /<(p|h1|h2|h3)((?: [^>]*)?)>([\s\S]*?)<\/\1>/gi,
+    (full, tag: string, attrs: string, inner: string) => {
+      const lines = inner.split(/<br\s*\/?>/i).filter((l) => l.trim().length > 0);
+      if (lines.length <= 1) return full;
+      return lines.map((line) => `<${tag}${attrs}>${line}</${tag}>`).join("");
+    },
+  );
+}
+
 // エディタへ読み込む直前に、旧形式（プレーンテキスト）なら段落HTMLへ変換する
 export function toEditorHtml(body: string): string {
   if (!body.trim()) return "<p></p>";
-  return isPlainText(body) ? textToParagraphs(body) : body;
+  const html = isPlainText(body) ? textToParagraphs(body) : body;
+  return splitSoftBreaksIntoBlocks(html);
 }
 
 // 音声メモの文字起こし結果をHTML本文の末尾に安全に追記するための段落HTML

@@ -116,7 +116,10 @@ export default function NoteEditor({
       }),
       TextStyle,
       Color,
-      Placeholder.configure({ placeholder: "ここにメモを入力…" }),
+      Placeholder.configure({
+        placeholder: ({ node }) =>
+          node.type.name === "heading" ? `見出し${node.attrs.level}` : "ここにメモを入力…",
+      }),
     ],
     editorProps: {
       attributes: {
