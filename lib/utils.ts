@@ -44,15 +44,22 @@ export function formatRelative(dateStr: string): string {
   });
 }
 
+// リッチテキスト本文（HTML）からタグを取り除いたプレーンテキストを得る
+export function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ");
+}
+
 // 本文からプレビュー用のスニペットを作る
 export function snippet(body: string, len = 80): string {
-  const oneLine = body.replace(/\s+/g, " ").trim();
+  const oneLine = stripHtml(body).replace(/\s+/g, " ").trim();
   return oneLine.length > len ? oneLine.slice(0, len) + "…" : oneLine;
 }
 
 // タイトルが空のときのフォールバック（本文1行目 or "無題のメモ"）
 export function displayTitle(title: string, body: string): string {
   if (title.trim()) return title.trim();
-  const firstLine = body.split("\n").find((l) => l.trim());
+  const firstLine = stripHtml(body)
+    .split("\n")
+    .find((l) => l.trim());
   return firstLine ? firstLine.trim().slice(0, 40) : "無題のメモ";
 }

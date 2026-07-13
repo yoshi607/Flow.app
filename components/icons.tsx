@@ -96,6 +96,48 @@ export const IconWindow = ({ className = base }: P) => (
   </svg>
 );
 
+export const IconBold = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 4h7a3.5 3.5 0 0 1 0 7H6zM6 11h8a3.5 3.5 0 0 1 0 7H6z" />
+  </svg>
+);
+
+export const IconItalic = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M11 4h6M7 20h6M14 4L10 20" />
+  </svg>
+);
+
+export const IconUnderline = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M6 4v7a6 6 0 0 0 12 0V4M4 20h16" />
+  </svg>
+);
+
+export const IconHeading1 = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 5v14M11 5v14M3 12h8M17 19V9l-3 2" />
+  </svg>
+);
+
+export const IconHeading2 = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 5v14M11 5v14M3 12h8M14 10a2.5 2.5 0 0 1 5 0c0 2-5 3-5 6.5h5" />
+  </svg>
+);
+
+export const IconHeading3 = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 5v14M11 5v14M3 12h8M14.5 9.5A2.2 2.2 0 0 1 16.5 8.5c1.2 0 2 .7 2 1.9s-.9 1.8-2 1.8c1.2 0 2.2.7 2.2 2s-.9 2.1-2.2 2.1a2.3 2.3 0 0 1-2.2-1.5" />
+  </svg>
+);
+
+export const IconParagraph = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M13 4v16M9 4h7.5a3.5 3.5 0 0 1 0 7H9a3.5 3.5 0 0 1 0-7z" />
+  </svg>
+);
+
 export const IconSettings = ({ className = base }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />

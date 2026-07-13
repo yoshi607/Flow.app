@@ -59,3 +59,30 @@ body {
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* メモ本文（Tiptap）の見出し・空欄プレースホルダー */
+.ProseMirror {
+  min-height: 100%;
+}
+.ProseMirror p {
+  margin: 0 0 0.5em;
+}
+.ProseMirror h1 {
+  @apply text-xl font-semibold tracking-tight;
+  margin: 0.6em 0 0.3em;
+}
+.ProseMirror h2 {
+  @apply text-lg font-semibold tracking-tight;
+  margin: 0.6em 0 0.3em;
+}
+.ProseMirror h3 {
+  @apply text-base font-semibold tracking-tight;
+  margin: 0.6em 0 0.3em;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  @apply text-neutral-300 dark:text-neutral-600;
+}

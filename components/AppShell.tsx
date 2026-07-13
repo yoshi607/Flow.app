@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useNotes } from "@/lib/store";
 import { type Note } from "@/lib/types";
+import { stripHtml } from "@/lib/utils";
 import Sidebar, { type View } from "./Sidebar";
 import NoteList from "./NoteList";
 import NoteEditor from "./NoteEditor";
@@ -31,7 +32,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       list = list.filter(
         (n) =>
           n.title.toLowerCase().includes(q) ||
-          n.body.toLowerCase().includes(q) ||
+          stripHtml(n.body).toLowerCase().includes(q) ||
           folderName(n.folder_id).includes(q) ||
           (n.tags ?? []).some((t) => t.toLowerCase().includes(q)),
       );

@@ -188,13 +188,16 @@ export function NotesProvider({
 
   const setNoteType = useCallback(
     (id: string, type: NoteType) => {
+      const note = notes.find((n) => n.id === id);
+      // すでに同じ type の場合は期限を延長しない（再クリックで7日が延びるのを防ぐ）
+      if (note && note.type === type) return;
       const patch: Partial<Note> =
         type === "short"
           ? { type, expires_at: daysFromNowISO(SHORT_NOTE_DAYS) }
           : { type, expires_at: null };
       updateNote(id, patch, true);
     },
-    [updateNote],
+    [notes, updateNote],
   );
 
   const togglePin = useCallback(

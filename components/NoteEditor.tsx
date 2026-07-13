@@ -2,9 +2,15 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { TextStyle, Color } from "@tiptap/extension-text-style";
+import Placeholder from "@tiptap/extension-placeholder";
 import { useNotes } from "@/lib/store";
 import { type Note } from "@/lib/types";
 import { shortNoteRemainingDays, trashRemainingDays } from "@/lib/utils";
+import { toEditorHtml, toAppendedParagraphs } from "@/lib/richtext";
+import RichTextToolbar from "./RichTextToolbar";
 
 // 録音ボタンを押した時だけ使うため遅延読み込みにし、メモを開く際の初期JSを減らす
 const VoiceRecorder = dynamic(() => import("./VoiceRecorder"), { ssr: false });
@@ -50,12 +56,47 @@ export default function NoteEditor({
   const trashed = note.status === "trashed";
   const tags = note.tags ?? [];
 
+  // key={note.id} で親から都度マウントされるため、ノート切り替え時は
+  // このエディタインスタンス自体が再生成される（setContentでの手動同期は不要）
+  const editor = useEditor({
+    immediatelyRender: false,
+    shouldRerenderOnTransaction: true,
+    editable: !trashed,
+    content: toEditorHtml(note.body),
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+        link: false,
+        strike: false,
+        code: false,
+        codeBlock: false,
+        blockquote: false,
+        horizontalRule: false,
+        bulletList: false,
+        orderedList: false,
+        listItem: false,
+        listKeymap: false,
+      }),
+      TextStyle,
+      Color,
+      Placeholder.configure({ placeholder: "ここにメモを入力…" }),
+    ],
+    editorProps: {
+      attributes: {
+        class:
+          "thin-scroll flex-1 overflow-y-auto px-4 py-3 leading-relaxed outline-none",
+      },
+    },
+    onUpdate: ({ editor }) => {
+      updateNote(note.id, { body: editor.getHTML() });
+    },
+  });
+
   function handleVoiceResult(result: { title: string; text: string }) {
     setRecording(false);
-    const newBody = note.body.trim()
-      ? `${note.body.trim()}\n\n${result.text}`
-      : result.text;
-    const patch: Partial<Note> = { body: newBody };
+    if (!editor) return;
+    editor.chain().focus("end").insertContent(toAppendedParagraphs(result.text)).run();
+    const patch: Partial<Note> = { body: editor.getHTML() };
     if (!note.title.trim() && result.title) patch.title = result.title;
     updateNote(note.id, patch, true);
   }
@@ -261,7 +302,7 @@ export default function NoteEditor({
         </div>
       )}
 
-      {/* 本文 */}
+      {/* タイトル */}
       <input
         value={note.title}
         readOnly={trashed}
@@ -269,13 +310,12 @@ export default function NoteEditor({
         placeholder="タイトル"
         className="bg-transparent px-4 pt-4 text-2xl font-semibold tracking-tight outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-600"
       />
-      <textarea
-        value={note.body}
-        readOnly={trashed}
-        onChange={(e) => updateNote(note.id, { body: e.target.value })}
-        placeholder="ここにメモを入力…"
-        className="thin-scroll flex-1 resize-none bg-transparent px-4 py-3 leading-relaxed outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-600"
-      />
+
+      {/* 書式ツールバー */}
+      {!trashed && <RichTextToolbar editor={editor} />}
+
+      {/* 本文（リッチテキスト） */}
+      <EditorContent editor={editor} className="flex min-h-0 flex-1 flex-col" />
 
       {recording && (
         <VoiceRecorder
