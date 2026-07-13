@@ -4,17 +4,22 @@ const withPWA = withPWAInit({
   dest: "public",
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === "development",
+  // next-pwa が自動追加する "/" 専用キャッシュルート（タイムアウト設定が無く
+  // ネットワークを待ち続けうる）を無効化し、下記の navigate ルート1本（3秒タイムアウト）に統一する。
+  // ("/" は認証状態でリダイレクトが変わる動的ルートで静的プリキャッシュ対象にはならないため無効化しても安全)
+  dynamicStartUrl: false,
   workboxOptions: {
     disableDevLogs: true,
-    // ログイン状態によって内容が変わる HTML は常にネットワークを優先し、
-    // 古いキャッシュ（真っ白画面の原因になりうる）を出さないようにする。
+    // ログイン状態によって内容が変わる HTML は常にネットワークを優先しつつ、
+    // 電波が悪い環境でもすぐキャッシュ済みシェルへフォールバックできるよう
+    // タイムアウトを短めに設定する。
     runtimeCaching: [
       {
         urlPattern: ({ request }) => request.mode === "navigate",
         handler: "NetworkFirst",
         options: {
           cacheName: "html-pages",
-          networkTimeoutSeconds: 10,
+          networkTimeoutSeconds: 3,
         },
       },
     ],

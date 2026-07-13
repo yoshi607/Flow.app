@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useNotes } from "@/lib/store";
 import { type Note } from "@/lib/types";
 import { shortNoteRemainingDays, trashRemainingDays } from "@/lib/utils";
-import VoiceRecorder from "./VoiceRecorder";
+
+// 録音ボタンを押した時だけ使うため遅延読み込みにし、メモを開く際の初期JSを減らす
+const VoiceRecorder = dynamic(() => import("./VoiceRecorder"), { ssr: false });
 import {
   IconBack,
   IconPin,

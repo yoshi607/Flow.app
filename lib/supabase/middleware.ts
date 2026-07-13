@@ -5,7 +5,7 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // 各リクエストで Supabase セッションを更新し、未ログインなら /login へ誘導する
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  let cookiesToSetLater: CookieToSet[] = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,10 +19,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
-          );
+          cookiesToSetLater = cookiesToSet;
         },
       },
     },
@@ -50,5 +47,18 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return supabaseResponse;
+  // 検証済みユーザー情報をヘッダーで下流の Server Component に渡し、
+  // ページ側で getUser() を再度呼ばずに済むようにする（起動時の往復を1回に減らす）
+  const requestHeaders = new Headers(request.headers);
+  if (user) {
+    requestHeaders.set("x-user-id", user.id);
+    if (user.email) requestHeaders.set("x-user-email", user.email);
+  }
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  cookiesToSetLater.forEach(({ name, value, options }) =>
+    response.cookies.set(name, value, options),
+  );
+
+  return response;
 }

@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { fetchInitialNotesData } from "@/lib/supabase/queries";
 import { NotesProvider } from "@/lib/store";
 import StandaloneNote from "@/components/StandaloneNote";
 
@@ -9,15 +11,15 @@ export default async function NoteWindow({
 }: {
   params: { id: string };
 }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userId = headers().get("x-user-id");
 
-  if (!user) redirect("/login");
+  if (!userId) redirect("/login");
+
+  const supabase = createClient();
+  const { notes, folders } = await fetchInitialNotesData(supabase);
 
   return (
-    <NotesProvider userId={user.id}>
+    <NotesProvider userId={userId} initialNotes={notes} initialFolders={folders}>
       <StandaloneNote noteId={params.id} />
     </NotesProvider>
   );

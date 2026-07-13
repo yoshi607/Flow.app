@@ -44,15 +44,21 @@ function daysFromNowISO(days: number): string {
 
 export function NotesProvider({
   userId,
+  initialNotes = [],
+  initialFolders = [],
   children,
 }: {
   userId: string;
+  initialNotes?: Note[];
+  initialFolders?: Folder[];
   children: React.ReactNode;
 }) {
   const supabase = useMemo(() => createClient(), []);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const [folders, setFolders] = useState<Folder[]>(initialFolders);
+  // メモ/フォルダはサーバー側で先読み済みのため常に false
+  // （NotesContextValue の互換性のため型としては残す）
+  const [loading] = useState(false);
 
   // デバウンス保存用タイマーと、保存中ノートの管理
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -60,28 +66,6 @@ export function NotesProvider({
   const savingIds = useRef<Set<string>>(new Set());
   // 直近にローカル編集した時刻（リアルタイム上書きの誤爆防止）
   const lastEditedAt = useRef<Record<string, number>>({});
-
-  // 初期読み込み
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const [{ data: n }, { data: f }] = await Promise.all([
-        supabase
-          .from("notes")
-          .select("*")
-          .order("pinned", { ascending: false })
-          .order("updated_at", { ascending: false }),
-        supabase.from("folders").select("*").order("sort_order").order("created_at"),
-      ]);
-      if (!active) return;
-      setNotes((n as Note[]) ?? []);
-      setFolders((f as Folder[]) ?? []);
-      setLoading(false);
-    })();
-    return () => {
-      active = false;
-    };
-  }, [supabase]);
 
   // リアルタイム購読（他デバイスの変更を反映）
   useEffect(() => {
