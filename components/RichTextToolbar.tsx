@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { type Editor } from "@tiptap/react";
 import {
   IconBold,
@@ -27,7 +28,12 @@ const HEADINGS: { level: 0 | 1 | 2 | 3; icon: typeof IconParagraph; title: strin
 ];
 
 export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
+  const [colorOpen, setColorOpen] = useState(false);
   if (!editor) return null;
+
+  // 現在選択中の文字色（未設定なら null）
+  const currentColor: string | null =
+    editor.getAttributes("textStyle").color ?? null;
 
   const isHeadingActive = (level: 0 | 1 | 2 | 3) =>
     level === 0 ? editor.isActive("paragraph") : editor.isActive("heading", { level });
@@ -102,28 +108,64 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
         </button>
       </div>
 
-      {/* 文字色 */}
-      <div className="flex items-center gap-1.5">
-        {COLORS.map((c) => {
-          const active = editor.isActive("textStyle", { color: c.hex });
-          return (
-            <button
-              key={c.hex}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() =>
-                active
-                  ? editor.chain().focus().unsetColor().run()
-                  : editor.chain().focus().setColor(c.hex).run()
-              }
-              title={c.name}
-              className={`h-5 w-5 shrink-0 rounded-full ring-offset-2 transition dark:ring-offset-neutral-950 ${
-                active ? "ring-2 ring-neutral-400" : ""
-              }`}
-              style={{ backgroundColor: c.hex }}
-            />
-          );
-        })}
+      {/* 文字色（1つのボタンにまとめ、タップで色選択） */}
+      <div className="relative">
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setColorOpen((v) => !v)}
+          title="文字色"
+          className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
+            colorOpen
+              ? "bg-brand-200 dark:bg-neutral-700"
+              : "hover:bg-brand-100 dark:hover:bg-neutral-800"
+          }`}
+        >
+          {/* 現在色の丸（未設定時はグレー枠） */}
+          <span
+            className="h-5 w-5 rounded-full border border-black/10 dark:border-white/20"
+            style={{ backgroundColor: currentColor ?? "transparent" }}
+          />
+        </button>
+        {colorOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setColorOpen(false)} />
+            <div className="absolute right-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
+              {COLORS.map((c) => {
+                const active = editor.isActive("textStyle", { color: c.hex });
+                return (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      editor.chain().focus().setColor(c.hex).run();
+                      setColorOpen(false);
+                    }}
+                    title={c.name}
+                    className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 transition dark:ring-offset-neutral-900 ${
+                      active ? "ring-2 ring-neutral-400" : ""
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                  />
+                );
+              })}
+              {/* 色を解除（標準色に戻す） */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  editor.chain().focus().unsetColor().run();
+                  setColorOpen(false);
+                }}
+                title="標準色"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-neutral-300 text-[10px] text-neutral-500 dark:border-neutral-600"
+              >
+                A
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

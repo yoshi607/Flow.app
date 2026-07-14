@@ -30,8 +30,18 @@ export async function uploadAttachment(
     throw new Error(`「${file.name}」は20MBを超えているため添付できません。`);
   }
 
-  const safeName = file.name.replace(/[^\w.\-ぁ-んァ-ヶ一-龠]/g, "_");
-  const path = `${userId}/${noteId}/${crypto.randomUUID()}-${safeName}`;
+  // Supabase Storage のキーは ASCII のみ安全なので、パスに使う名前は
+  // 非ASCII（日本語など）を除去する。表示名(file_name)は元の名前を保持。
+  // （手書き画像「手書き…png」などが Invalid key で失敗するのを防ぐ）
+  const extMatch = file.name.match(/\.[A-Za-z0-9]+$/);
+  const ext = extMatch ? extMatch[0] : "";
+  const asciiBase =
+    file.name
+      .slice(0, file.name.length - ext.length)
+      .replace(/[^\w.\-]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "") || "file";
+  const path = `${userId}/${noteId}/${crypto.randomUUID()}-${asciiBase}${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)

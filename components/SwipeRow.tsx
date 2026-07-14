@@ -75,21 +75,21 @@ export default function SwipeRow({
 
   return (
     <div className={`flow-swipe-row relative overflow-hidden ${className}`}>
-      {/* 背後のアクション */}
+      {/* 背後のアクション（丸みのある四角ボタン） */}
       <div className="absolute inset-y-0 right-0 flex">
         {actions.map((a) => (
-          <button
-            key={a.key}
-            style={{ width: ACTION_WIDTH }}
-            onClick={() => {
-              close();
-              a.onClick();
-            }}
-            className={`flex flex-col items-center justify-center gap-1 text-xs font-medium text-white ${a.className}`}
-          >
-            <span className="h-5 w-5">{a.icon}</span>
-            {a.label}
-          </button>
+          <div key={a.key} style={{ width: ACTION_WIDTH }} className="flex p-1">
+            <button
+              onClick={() => {
+                close();
+                a.onClick();
+              }}
+              className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-medium text-white ${a.className}`}
+            >
+              <span className="h-5 w-5">{a.icon}</span>
+              {a.label}
+            </button>
+          </div>
         ))}
       </div>
 

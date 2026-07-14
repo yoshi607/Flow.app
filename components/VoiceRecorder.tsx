@@ -100,7 +100,9 @@ export default function VoiceRecorder({
       const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
       if (!tRes.ok) {
         const j = await tRes.json().catch(() => ({}));
-        throw new Error(j.error || "文字起こしに失敗しました");
+        // サーバーからの詳細(detail)があれば併せて表示して原因を追いやすくする
+        const detail = j.detail ? `\n${String(j.detail).slice(0, 200)}` : "";
+        throw new Error((j.error || "文字起こしに失敗しました") + detail);
       }
       const { text: rawText } = await tRes.json();
       if (!rawText || !rawText.trim()) {
@@ -183,7 +185,7 @@ export default function VoiceRecorder({
 
           {phase === "error" && (
             <>
-              <p className="text-center text-sm text-red-600 dark:text-red-400">
+              <p className="whitespace-pre-line break-words text-center text-sm text-red-600 dark:text-red-400">
                 {error}
               </p>
               <div className="flex gap-2">

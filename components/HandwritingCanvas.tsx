@@ -31,6 +31,9 @@ export default function HandwritingCanvas({
   const [color, setColor] = useState(PEN_COLORS[0]);
   const [width, setWidth] = useState(PEN_WIDTHS[1]);
   const [erasing, setErasing] = useState(false);
+  // 既定は「ペンのみ描画」。手のひらや指（touch）では描かず誤作動を防ぐ。
+  // Apple Pencil を持っていない場合はトグルで指描きに切り替え可能。
+  const [penOnly, setPenOnly] = useState(true);
 
   // キャンバスをコンテナサイズ×DPRで用意（にじみ防止）。既存の描画は保持しない。
   useEffect(() => {
@@ -60,8 +63,12 @@ export default function HandwritingCanvas({
       penSeen.current = true;
       return true;
     }
-    // ペンが使われたことがある端末では、指（touch）は描画しない＝手のひら誤爆防止
-    if (e.pointerType === "touch" && penSeen.current) return false;
+    if (e.pointerType === "mouse") return true; // PCでの確認用
+    // touch（指・手のひら）:
+    //  - ペンのみモード（既定）では一切描かない＝手のひら誤爆を完全に防ぐ
+    //  - ペンが一度でも使われたら、以後 touch は無視
+    if (penOnly) return false;
+    if (penSeen.current) return false;
     return true;
   }
 
@@ -203,6 +210,18 @@ export default function HandwritingCanvas({
           className="rounded-lg px-3 py-1.5 text-sm text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
         >
           全消去
+        </button>
+        {/* ペンのみ / 指でも描く の切替（既定はペンのみ＝手のひら誤作動防止） */}
+        <button
+          onClick={() => setPenOnly((v) => !v)}
+          className={`rounded-lg px-3 py-1.5 text-sm transition ${
+            penOnly
+              ? "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+              : "bg-brand-200 text-brand-700 dark:bg-neutral-700 dark:text-neutral-100"
+          }`}
+          title="ペンを持っていない場合は指でも描けます"
+        >
+          {penOnly ? "ペンのみ" : "指でも描く"}
         </button>
 
         <div className="flex-1" />

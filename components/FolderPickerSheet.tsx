@@ -1,7 +1,7 @@
 "use client";
 
 import { useNotes } from "@/lib/store";
-import { IconFolder, IconClose } from "./icons";
+import { IconFolder, IconClose, IconPlus } from "./icons";
 
 // メモの移動先フォルダを選ぶボトムシート。3点メニュー・左スワイプの
 // 「移動」から共通で使う。
@@ -14,7 +14,14 @@ export default function FolderPickerSheet({
   onPick: (folderId: string | null) => void;
   onClose: () => void;
 }) {
-  const { folders } = useNotes();
+  const { folders, createFolder } = useNotes();
+
+  async function handleCreate() {
+    const name = window.prompt("新しいフォルダ名を入力");
+    if (!name || !name.trim()) return;
+    const folder = await createFolder(name.trim());
+    if (folder) onPick(folder.id); // 作成したフォルダへそのまま移動
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -29,6 +36,13 @@ export default function FolderPickerSheet({
             <IconClose className="h-4 w-4" />
           </button>
         </div>
+        <button
+          onClick={handleCreate}
+          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-brand-700 transition hover:bg-brand-100/70 dark:text-brand-200 dark:hover:bg-neutral-800/60"
+        >
+          <IconPlus className="h-4 w-4" />
+          新しいフォルダを作成
+        </button>
         <button
           onClick={() => onPick(null)}
           className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition ${

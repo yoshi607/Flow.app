@@ -9,10 +9,12 @@ import {
   IconPlus,
   IconSettings,
   IconTag,
+  IconClock,
 } from "./icons";
 
 export type View =
   | { type: "all" }
+  | { type: "short" }
   | { type: "trash" }
   | { type: "folder"; folderId: string }
   | { type: "tag"; tag: string };
@@ -31,6 +33,9 @@ export default function Sidebar({
   const [newName, setNewName] = useState("");
 
   const activeCount = notes.filter((n) => n.status === "active").length;
+  const shortCount = notes.filter(
+    (n) => n.status === "active" && n.type === "short",
+  ).length;
   const trashCount = notes.filter((n) => n.status === "trashed").length;
 
   // ユーザーが作成した全タグ（重複除去・件数付き）
@@ -73,6 +78,16 @@ export default function Sidebar({
           <IconNotes className="h-4 w-4" />
           <span className="flex-1">すべてのメモ</span>
           <span className="text-xs text-neutral-400">{activeCount}</span>
+        </button>
+
+        {/* 短期メモ（⑧）：type=short のメモを集めた固定フォルダ。削除不可。 */}
+        <button
+          className={rowClass(isActive({ type: "short" }))}
+          onClick={() => onChangeView({ type: "short" })}
+        >
+          <IconClock className="h-4 w-4" />
+          <span className="flex-1">短期メモ</span>
+          <span className="text-xs text-neutral-400">{shortCount}</span>
         </button>
 
         <div className="pt-3">

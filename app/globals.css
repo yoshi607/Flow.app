@@ -8,6 +8,8 @@
   --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Segoe UI",
     Meiryo, sans-serif;
+  /* 全体的に文字・アイコン・余白を約1.2倍に（rem基準のTailwindがまとめて拡大される） */
+  font-size: 120%;
 }
 
 html,

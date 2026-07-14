@@ -35,6 +35,7 @@ import {
   IconDots,
   IconMove,
   IconPencil,
+  IconArchive,
 } from "./icons";
 
 export default function NoteEditor({
@@ -54,7 +55,6 @@ export default function NoteEditor({
 }) {
   const {
     userId,
-    folders,
     updateNote,
     setNoteType,
     togglePin,
@@ -195,22 +195,6 @@ export default function NoteEditor({
           {standalone ? <IconClose /> : <IconBack />}
         </button>
 
-        <select
-          value={note.folder_id ?? ""}
-          disabled={trashed}
-          onChange={(e) =>
-            updateNote(note.id, { folder_id: e.target.value || null }, true)
-          }
-          className="rounded-lg bg-brand-100 px-2 py-1.5 text-sm outline-none disabled:opacity-50 dark:bg-neutral-800"
-        >
-          <option value="">フォルダなし</option>
-          {folders.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-
         <div className="flex-1" />
 
         {!trashed && (
@@ -292,6 +276,20 @@ export default function NoteEditor({
                       <IconPin filled={note.pinned} className="h-4 w-4 text-brand-500" />
                       {note.pinned ? "ピンを外す" : "メモをピン留め"}
                     </button>
+                    {/* 長期保存にする（⑦）。すでに長期保存のメモでは非表示 */}
+                    {note.type === "short" && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setNoteType(note.id, "long");
+                          setMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
+                      >
+                        <IconArchive className="h-4 w-4 text-neutral-500" />
+                        長期保存にする
+                      </button>
+                    )}
                     {onOpenWindow && (
                       <button
                         role="menuitem"
@@ -381,35 +379,14 @@ export default function NoteEditor({
           </button>
         </div>
       ) : (
+        // 書式ツールバー行（短期/長期トグルは廃止し、3点メニューへ移動 ⑦）
         <div className="flex flex-wrap items-center gap-3 border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
-          <div className="flex rounded-lg bg-brand-100 p-0.5 text-sm dark:bg-neutral-800">
-            <button
-              onClick={() => setNoteType(note.id, "long")}
-              className={`rounded-md px-3 py-1 transition ${
-                note.type === "long"
-                  ? "bg-white shadow-sm dark:bg-neutral-950"
-                  : "text-neutral-500"
-              }`}
-            >
-              長期保存
-            </button>
-            <button
-              onClick={() => setNoteType(note.id, "short")}
-              className={`rounded-md px-3 py-1 transition ${
-                note.type === "short"
-                  ? "bg-white shadow-sm dark:bg-neutral-950"
-                  : "text-neutral-500"
-              }`}
-            >
-              短期（7日）
-            </button>
-          </div>
           {note.type === "short" &&
             (() => {
               const d = shortNoteRemainingDays(note.expires_at);
               return d !== null ? (
-                <span className="text-xs text-orange-600 dark:text-orange-400">
-                  あと{d}日で自動的にゴミ箱へ
+                <span className="rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+                  短期・あと{d}日
                 </span>
               ) : null;
             })()}

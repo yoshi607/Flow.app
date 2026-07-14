@@ -172,11 +172,13 @@ export default function NoteList({
     ? "検索結果"
     : view.type === "trash"
       ? "ゴミ箱"
-      : view.type === "tag"
-        ? `#${view.tag}`
-        : view.type === "folder"
-          ? (folders.find((f) => f.id === view.folderId)?.name ?? "フォルダ")
-          : "すべてのメモ";
+      : view.type === "short"
+        ? "短期メモ"
+        : view.type === "tag"
+          ? `#${view.tag}`
+          : view.type === "folder"
+            ? (folders.find((f) => f.id === view.folderId)?.name ?? "フォルダ")
+            : "すべてのメモ";
 
   return (
     <div className="flex h-full flex-col bg-white/70 backdrop-blur-xl dark:bg-neutral-950">

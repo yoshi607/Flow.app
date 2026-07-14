@@ -38,6 +38,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       );
     } else if (view.type === "trash") {
       list = notes.filter((n) => n.status === "trashed");
+    } else if (view.type === "short") {
+      // 短期メモフォルダ（⑧）：type=short のアクティブなメモ
+      list = notes.filter((n) => n.status === "active" && n.type === "short");
     } else if (view.type === "folder") {
       list = notes.filter(
         (n) => n.status === "active" && n.folder_id === view.folderId,
