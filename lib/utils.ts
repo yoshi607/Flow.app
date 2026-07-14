@@ -64,6 +64,30 @@ export function displayTitle(title: string, body: string): string {
   return firstLine ? firstLine.trim().slice(0, 40) : "無題のメモ";
 }
 
+// メモを共有する（⑥）。
+// iOS/iPad は Web Share API でネイティブの共有シートが開く。
+// Windows などは対応ブラウザなら共有シート、非対応ならクリップボードにコピー。
+export async function shareNote(title: string, body: string): Promise<void> {
+  const text = `${title ? title + "\n\n" : ""}${snippet(body, 5000)}`.trim();
+  const shareTitle = title.trim() || "メモ";
+  try {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      await navigator.share({ title: shareTitle, text });
+      return;
+    }
+  } catch (e) {
+    // ユーザーがキャンセルした場合などは何もしない
+    if (e instanceof DOMException && e.name === "AbortError") return;
+  }
+  // フォールバック：クリップボードへコピー
+  try {
+    await navigator.clipboard?.writeText(text);
+    window.alert("この端末は共有に非対応のため、内容をクリップボードにコピーしました");
+  } catch {
+    window.alert("共有・コピーに対応していません");
+  }
+}
+
 // 添付ファイルのサイズ表示（例: 1.2 MB）
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

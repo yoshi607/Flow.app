@@ -7,15 +7,19 @@ import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, Color } from "@tiptap/extension-text-style";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useNotes } from "@/lib/store";
+import { useDevice } from "@/lib/useDevice";
 import { createClient } from "@/lib/supabase/client";
 import { type Note, type Attachment } from "@/lib/types";
-import { shortNoteRemainingDays, trashRemainingDays, formatFileSize } from "@/lib/utils";
+import { shortNoteRemainingDays, trashRemainingDays, formatFileSize, shareNote } from "@/lib/utils";
 import { toEditorHtml, toAppendedParagraphs } from "@/lib/richtext";
 import { listAttachments, uploadAttachment, deleteAttachment } from "@/lib/attachments";
 import RichTextToolbar from "./RichTextToolbar";
+import FolderPickerSheet from "./FolderPickerSheet";
 
 // 録音ボタンを押した時だけ使うため遅延読み込みにし、メモを開く際の初期JSを減らす
 const VoiceRecorder = dynamic(() => import("./VoiceRecorder"), { ssr: false });
+// 手書きキャンバスも同様に遅延読み込み（iPad で開いた時だけ必要）
+const HandwritingCanvas = dynamic(() => import("./HandwritingCanvas"), { ssr: false });
 import {
   IconBack,
   IconPin,
@@ -28,6 +32,9 @@ import {
   IconCompress,
   IconWindow,
   IconClose,
+  IconDots,
+  IconMove,
+  IconPencil,
 } from "./icons";
 
 export default function NoteEditor({
@@ -56,7 +63,11 @@ export default function NoteEditor({
     deleteNotePermanently,
   } = useNotes();
   const [recording, setRecording] = useState(false);
+  const [drawing, setDrawing] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const { isIPad } = useDevice();
   const supabase = useMemo(() => createClient(), []);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -84,6 +95,20 @@ export default function NoteEditor({
       } catch (err) {
         window.alert(err instanceof Error ? err.message : "添付に失敗しました");
       }
+    }
+    setUploading(false);
+  }
+
+  // 手書きキャンバスで描いた内容を PNG 画像として添付に保存（①）
+  async function handleDrawingSave(blob: Blob) {
+    setDrawing(false);
+    const file = new File([blob], `手書き-${Date.now()}.png`, { type: "image/png" });
+    setUploading(true);
+    try {
+      const attachment = await uploadAttachment(supabase, userId, note.id, file);
+      setAttachments((prev) => [...prev, attachment]);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "手書きの保存に失敗しました");
     }
     setUploading(false);
   }
@@ -199,24 +224,6 @@ export default function NoteEditor({
                 {isFullscreen ? <IconCompress /> : <IconExpand />}
               </button>
             )}
-            {onOpenWindow && (
-              <button
-                onClick={onOpenWindow}
-                className="hidden rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 md:block"
-                title="別ウィンドウで開く"
-              >
-                <IconWindow />
-              </button>
-            )}
-            <button
-              onClick={() => togglePin(note.id)}
-              className={`rounded-lg p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
-                note.pinned ? "text-brand-500" : "text-neutral-500"
-              }`}
-              title={note.pinned ? "ピンを外す" : "ピン留め"}
-            >
-              <IconPin filled={note.pinned} />
-            </button>
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
@@ -239,19 +246,107 @@ export default function NoteEditor({
             >
               <IconMic />
             </button>
-            <button
-              onClick={() => {
-                trashNote(note.id);
-                onBack();
-              }}
-              className="rounded-lg p-2 text-neutral-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
-              title="ゴミ箱へ"
-            >
-              <IconTrash />
-            </button>
+            {/* 手書き（①）：iPad のみ表示。Apple Pencil での描画を想定 */}
+            {isIPad && (
+              <button
+                onClick={() => setDrawing(true)}
+                className="rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+                title="手書き"
+              >
+                <IconPencil />
+              </button>
+            )}
+
+            {/* 右上の3点メニュー（⑤） */}
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className={`rounded-lg p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
+                  menuOpen ? "bg-brand-100 text-brand-700 dark:bg-neutral-800" : "text-neutral-500"
+                }`}
+                title="その他"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <IconDots />
+              </button>
+              {menuOpen && (
+                <>
+                  {/* 画面外タップで閉じる */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-brand-200/60 bg-white py-1 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
+                  >
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        togglePin(note.id);
+                        setMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
+                    >
+                      <IconPin filled={note.pinned} className="h-4 w-4 text-brand-500" />
+                      {note.pinned ? "ピンを外す" : "メモをピン留め"}
+                    </button>
+                    {onOpenWindow && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          onOpenWindow();
+                          setMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
+                      >
+                        <IconWindow className="h-4 w-4 text-neutral-500" />
+                        別ウィンドウで開く
+                      </button>
+                    )}
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setFolderPickerOpen(true);
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
+                    >
+                      <IconMove className="h-4 w-4 text-neutral-500" />
+                      メモのフォルダ移動
+                    </button>
+                    <div className="my-1 border-t border-brand-200/60 dark:border-neutral-800" />
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        trashNote(note.id);
+                        onBack();
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                    >
+                      <IconTrash className="h-4 w-4" />
+                      削除
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </>
         )}
       </div>
+
+      {folderPickerOpen && (
+        <FolderPickerSheet
+          currentFolderId={note.folder_id}
+          onPick={(folderId) => {
+            updateNote(note.id, { folder_id: folderId }, true);
+            setFolderPickerOpen(false);
+          }}
+          onClose={() => setFolderPickerOpen(false)}
+        />
+      )}
 
       {/* 短期/長期トグル or ゴミ箱バナー */}
       {trashed ? (
@@ -436,6 +531,13 @@ export default function NoteEditor({
         <VoiceRecorder
           onResult={handleVoiceResult}
           onClose={() => setRecording(false)}
+        />
+      )}
+
+      {drawing && (
+        <HandwritingCanvas
+          onSave={handleDrawingSave}
+          onClose={() => setDrawing(false)}
         />
       )}
     </div>

@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useNotes } from "@/lib/store";
+import FolderList from "./FolderList";
 import {
   IconNotes,
   IconTrash,
-  IconFolder,
   IconPlus,
   IconSettings,
   IconTag,
@@ -26,14 +26,12 @@ export default function Sidebar({
   onChangeView: (v: View) => void;
   onOpenSettings: () => void;
 }) {
-  const { notes, folders, createFolder, renameFolder, deleteFolder } = useNotes();
+  const { notes, createFolder } = useNotes();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
 
   const activeCount = notes.filter((n) => n.status === "active").length;
   const trashCount = notes.filter((n) => n.status === "trashed").length;
-  const folderCount = (id: string) =>
-    notes.filter((n) => n.status === "active" && n.folder_id === id).length;
 
   // ユーザーが作成した全タグ（重複除去・件数付き）
   const tags = useMemo(() => {
@@ -91,40 +89,11 @@ export default function Sidebar({
             </button>
           </div>
 
-          {folders.map((f) => (
-            <div key={f.id} className="group relative">
-              <button
-                className={rowClass(
-                  view.type === "folder" && view.folderId === f.id,
-                )}
-                onClick={() => onChangeView({ type: "folder", folderId: f.id })}
-                onDoubleClick={() => {
-                  const name = window.prompt("フォルダ名を変更", f.name);
-                  if (name && name.trim()) renameFolder(f.id, name.trim());
-                }}
-              >
-                <IconFolder className="h-4 w-4" />
-                <span className="flex-1 truncate">{f.name}</span>
-                <span className="text-xs text-neutral-400">
-                  {folderCount(f.id)}
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `フォルダ「${f.name}」を削除しますか？\n（中のメモは削除されず、フォルダ未設定になります）`,
-                    )
-                  )
-                    deleteFolder(f.id);
-                }}
-                className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded p-1 text-neutral-400 hover:bg-brand-200 hover:text-red-600 group-hover:block dark:hover:bg-neutral-700"
-                title="フォルダを削除"
-              >
-                <IconTrash className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+          <FolderList
+            view={view}
+            onChangeView={onChangeView}
+            rowClass={rowClass}
+          />
 
           {adding && (
             <input

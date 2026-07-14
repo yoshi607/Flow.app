@@ -87,3 +87,69 @@ body {
   pointer-events: none;
   @apply text-neutral-300 dark:text-neutral-600;
 }
+
+/* ===== ＋ボタンの拡散アニメーション（②） =====
+   タップ時に外側へ広がるリングと粒子を一度だけ再生する。 */
+@keyframes flow-burst-ring {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+@keyframes flow-burst-particle {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(0) scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(22px) scale(0.2);
+    opacity: 0;
+  }
+}
+.flow-burst-ring {
+  animation: flow-burst-ring 0.5s ease-out forwards;
+}
+.flow-burst-particle {
+  animation: flow-burst-particle 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+/* ===== メモを開く右スライド（③・モバイル） ===== */
+@keyframes flow-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.flow-slide-in-right {
+  animation: flow-slide-in-right 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+/* PC/タブレット横向き（3ペイン表示）ではスライドしない */
+@media (min-width: 768px) {
+  .flow-slide-in-right {
+    animation: none;
+  }
+}
+
+/* ===== 左スワイプ操作（⑥） ===== */
+.flow-swipe-row {
+  touch-action: pan-y;
+}
+.flow-swipe-content {
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+.flow-swipe-content.dragging {
+  transition: none;
+}
+
+/* 並べ替え中のフォルダ（④） */
+.flow-reorder-dragging {
+  @apply opacity-70 shadow-lg;
+  transform: scale(1.02);
+}

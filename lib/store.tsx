@@ -33,6 +33,7 @@ interface NotesContextValue {
   createFolder: (name: string) => Promise<Folder | null>;
   renameFolder: (id: string, name: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
+  reorderFolders: (orderedIds: string[]) => Promise<void>;
 }
 
 const NotesContext = createContext<NotesContextValue | null>(null);
@@ -288,6 +289,29 @@ export function NotesProvider({
     [supabase],
   );
 
+  // フォルダの並べ替え（④）。新しい並び順の id 配列を受け取り、
+  // ローカルを即時更新してから各フォルダの sort_order を保存する。
+  const reorderFolders = useCallback(
+    async (orderedIds: string[]) => {
+      setFolders((prev) => {
+        const byId = new Map(prev.map((f) => [f.id, f]));
+        const next = orderedIds
+          .map((id, i) => {
+            const f = byId.get(id);
+            return f ? { ...f, sort_order: i } : null;
+          })
+          .filter((f): f is Folder => f !== null);
+        return next;
+      });
+      await Promise.all(
+        orderedIds.map((id, i) =>
+          supabase.from("folders").update({ sort_order: i }).eq("id", id),
+        ),
+      );
+    },
+    [supabase],
+  );
+
   const value: NotesContextValue = {
     notes,
     folders,
@@ -304,6 +328,7 @@ export function NotesProvider({
     createFolder,
     renameFolder,
     deleteFolder,
+    reorderFolders,
   };
 
   return <NotesContext.Provider value={value}>{children}</NotesContext.Provider>;

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useNotes } from "@/lib/store";
 import { type Note } from "@/lib/types";
 import {
@@ -8,9 +9,21 @@ import {
   formatRelative,
   shortNoteRemainingDays,
   trashRemainingDays,
+  shareNote,
 } from "@/lib/utils";
 import { type View } from "./Sidebar";
-import { IconPlus, IconSearch, IconMenu, IconPin } from "./icons";
+import SwipeRow, { type SwipeAction } from "./SwipeRow";
+import FolderPickerSheet from "./FolderPickerSheet";
+import {
+  IconPlus,
+  IconSearch,
+  IconMenu,
+  IconPin,
+  IconShare,
+  IconMove,
+  IconTrash,
+  IconRestore,
+} from "./icons";
 
 function Countdown({ note }: { note: Note }) {
   if (note.status === "trashed") {
@@ -34,6 +47,47 @@ function Countdown({ note }: { note: Note }) {
   return null;
 }
 
+// ＋ボタン：タップで拡散アニメーション（②）を再生してから onCreate を呼ぶ
+function CreateButton({ onCreate }: { onCreate: () => void }) {
+  const [bursts, setBursts] = useState<number[]>([]);
+  // 放射する粒子の角度（8方向）
+  const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+
+  function handleClick() {
+    const id = Date.now();
+    setBursts((b) => [...b, id]);
+    // アニメーション終了後に要素を片付ける
+    window.setTimeout(() => setBursts((b) => b.filter((x) => x !== id)), 550);
+    onCreate();
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="relative rounded-full bg-brand-200 p-2 text-brand-700 shadow-sm transition hover:bg-brand-300 active:scale-95 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+      title="新規メモ"
+    >
+      <IconPlus />
+      {bursts.map((id) => (
+        <span
+          key={id}
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+        >
+          <span className="flow-burst-ring absolute inset-0 rounded-full border-2 border-brand-400 dark:border-brand-500" />
+          {angles.map((a) => (
+            <span
+              key={a}
+              className="flow-burst-particle absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full bg-brand-500"
+              style={{ ["--a" as string]: `${a}deg` }}
+            />
+          ))}
+        </span>
+      ))}
+    </button>
+  );
+}
+
 export default function NoteList({
   notes,
   loading,
@@ -55,7 +109,64 @@ export default function NoteList({
   onCreate: () => void;
   onOpenMenu: () => void;
 }) {
-  const { folders, emptyTrash } = useNotes();
+  const {
+    folders,
+    emptyTrash,
+    trashNote,
+    restoreNote,
+    deleteNotePermanently,
+    updateNote,
+  } = useNotes();
+  // 「移動」対象のメモ（フォルダ選択シートを開く）
+  const [movingNote, setMovingNote] = useState<Note | null>(null);
+
+  // 各メモの左スワイプアクションを組み立てる（⑥）
+  function actionsFor(note: Note): SwipeAction[] {
+    if (note.status === "trashed") {
+      return [
+        {
+          key: "restore",
+          label: "復元",
+          icon: <IconRestore />,
+          className: "bg-brand-500",
+          onClick: () => restoreNote(note.id),
+        },
+        {
+          key: "delete",
+          label: "完全削除",
+          icon: <IconTrash />,
+          className: "bg-red-600",
+          onClick: () => {
+            if (window.confirm("このメモを完全に削除しますか？（元に戻せません）"))
+              deleteNotePermanently(note.id);
+          },
+        },
+      ];
+    }
+    return [
+      {
+        key: "share",
+        label: "共有",
+        icon: <IconShare />,
+        className: "bg-neutral-500",
+        onClick: () => shareNote(note.title, note.body),
+      },
+      {
+        key: "move",
+        label: "移動",
+        icon: <IconMove />,
+        className: "bg-brand-500",
+        onClick: () => setMovingNote(note),
+      },
+      {
+        key: "trash",
+        label: "削除",
+        icon: <IconTrash />,
+        className: "bg-red-600",
+        onClick: () => trashNote(note.id),
+      },
+    ];
+  }
 
   const title = query.trim()
     ? "検索結果"
@@ -93,13 +204,7 @@ export default function NoteList({
             </button>
           )
         ) : (
-          <button
-            onClick={onCreate}
-            className="rounded-full bg-brand-200 p-2 text-brand-700 shadow-sm transition hover:bg-brand-300 active:scale-95 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
-            title="新規メモ"
-          >
-            <IconPlus />
-          </button>
+          <CreateButton onCreate={onCreate} />
         )}
       </div>
 
@@ -130,10 +235,14 @@ export default function NoteList({
           </p>
         ) : (
           notes.map((note) => (
-            <button
+            <SwipeRow
               key={note.id}
+              actions={actionsFor(note)}
+              className="mb-1 rounded-2xl"
+            >
+            <button
               onClick={() => onSelect(note.id)}
-              className={`mb-1 block w-full rounded-2xl px-3 py-2.5 text-left transition ${
+              className={`block w-full rounded-2xl px-3 py-2.5 text-left transition ${
                 selectedId === note.id
                   ? "bg-brand-100 dark:bg-brand-500/20"
                   : "hover:bg-brand-100/60 dark:hover:bg-neutral-800/60"
@@ -168,9 +277,21 @@ export default function NoteList({
                 <Countdown note={note} />
               </div>
             </button>
+            </SwipeRow>
           ))
         )}
       </div>
+
+      {movingNote && (
+        <FolderPickerSheet
+          currentFolderId={movingNote.folder_id}
+          onPick={(folderId) => {
+            updateNote(movingNote.id, { folder_id: folderId }, true);
+            setMovingNote(null);
+          }}
+          onClose={() => setMovingNote(null)}
+        />
+      )}
     </div>
   );
 }

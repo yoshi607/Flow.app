@@ -138,14 +138,19 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         className={`flex-1 flex-col ${selectedId ? "flex" : "hidden md:flex"}`}
       >
         {selectedNote ? (
-          <NoteEditor
+          // key で開くたびに再マウントし、モバイルでは右スライドを再生（③）
+          <div
             key={selectedNote.id}
-            note={selectedNote}
-            onBack={closeEditor}
-            isFullscreen={fullscreen}
-            onToggleFullscreen={() => setFullscreen((v) => !v)}
-            onOpenWindow={openInWindow}
-          />
+            className="flow-slide-in-right flex h-full flex-col"
+          >
+            <NoteEditor
+              note={selectedNote}
+              onBack={closeEditor}
+              isFullscreen={fullscreen}
+              onToggleFullscreen={() => setFullscreen((v) => !v)}
+              onOpenWindow={openInWindow}
+            />
+          </div>
         ) : (
           <div className="hidden flex-1 items-center justify-center text-neutral-400 md:flex">
             <div className="text-center">
