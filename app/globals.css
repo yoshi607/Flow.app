@@ -155,3 +155,12 @@ body {
   @apply opacity-70 shadow-lg;
   transform: scale(1.02);
 }
+
+/* 手書き画面（①）：手のひらが触れても iOS の範囲選択・
+   長押しコールアウト（コピー/検索など）が出ないようにする */
+.flow-draw-overlay,
+.flow-draw-overlay * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

@@ -145,7 +145,7 @@ export default function HandwritingCanvas({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-neutral-950">
+    <div className="flow-draw-overlay fixed inset-0 z-50 flex select-none flex-col bg-white dark:bg-neutral-950">
       {/* ツールバー */}
       <div className="safe-top flex flex-wrap items-center gap-3 border-b border-brand-200/60 px-3 py-2 dark:border-neutral-800">
         <button
