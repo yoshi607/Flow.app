@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // 文字起こしテキストを Claude で整形し、タイトルを自動生成する
 export async function POST(request: Request) {
-  // ログイン必須
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  // ログイン必須（ミドルウェアが付与する x-user-id を信頼。transcribe と同様）
+  const userId = headers().get("x-user-id");
+  if (!userId) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 

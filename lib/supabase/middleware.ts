@@ -47,9 +47,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 検証済みユーザー情報をヘッダーで下流の Server Component に渡し、
-  // ページ側で getUser() を再度呼ばずに済むようにする（起動時の往復を1回に減らす）
+  // 検証済みユーザー情報をヘッダーで下流の Server Component / Route Handler に渡し、
+  // ページ・API 側で getUser() を再度呼ばずに済むようにする（起動時の往復を1回に減らす）。
+  // ※クライアントからの偽装を防ぐため、まず受信ヘッダーを必ず削除してから設定する。
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-email");
   if (user) {
     requestHeaders.set("x-user-id", user.id);
     if (user.email) requestHeaders.set("x-user-email", user.email);

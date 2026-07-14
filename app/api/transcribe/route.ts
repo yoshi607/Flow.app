@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // 音声ファイルを Groq Whisper で文字起こしする
 export async function POST(request: Request) {
-  // ログイン必須
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  // ログイン必須。ミドルウェアが検証済みユーザーを x-user-id ヘッダーで渡すので
+  // それを信頼する（Route Handler 内での getUser() はトークン更新時に
+  // Cookie の食い違いで 401 になることがあるため、ページと同じ方式に統一）。
+  const userId = headers().get("x-user-id");
+  if (!userId) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
