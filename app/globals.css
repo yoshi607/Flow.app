@@ -187,7 +187,7 @@ body {
 }
 
 /* ===== メモの削除 =====
-   一覧の行は左へ滑り出て消え、開いている本文は中心へ縮んで消える。
+   一覧の行は左へ、開いている本文は右へ滑り出て消える。
    どちらから消しても同じ動きになるよう、実際の削除はこの再生が
    終わってから行う（AppShell 側で待つ）。 */
 @keyframes flow-row-delete {
@@ -205,19 +205,21 @@ body {
   pointer-events: none;
 }
 
-@keyframes flow-note-collapse {
+/* 開いている本文は右へ。
+   ※ flow-slide-out-right とは別に用意する。あちらは3ペイン表示（md以上）で
+      無効化してあるが、削除の動きは画面幅によらず見せる必要がある。 */
+@keyframes flow-note-delete-out {
   from {
-    transform: scale(1);
+    transform: translateX(0);
     opacity: 1;
   }
   to {
-    transform: scale(0.85);
+    transform: translateX(100%);
     opacity: 0;
   }
 }
-.flow-note-collapse {
-  animation: flow-note-collapse 260ms var(--ease-out) forwards;
-  transform-origin: center center;
+.flow-note-delete-out {
+  animation: flow-note-delete-out 260ms var(--ease-out) forwards;
   pointer-events: none;
 }
 

@@ -317,7 +317,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     anim.addEventListener("cancel", done);
   }
 
-  // メモの削除。一覧の行は左へ滑り出て、開いている本文は中心へ縮んで消える。
+  // メモの削除。一覧の行は左へ、開いている本文は右へ滑り出て消え、
+  // そのあと本文には最新のメモを表示する。
   // 一覧から消しても本文の3点メニューから消しても同じ動きになるよう、
   // 削除の入口をここに一本化し、store の更新は再生が終わるまで待つ
   // （先に消すと、消える様子を見せる相手がいなくなるため）。
@@ -329,16 +330,22 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       return;
 
     const wasSelected = id === selectedId;
+    // 消したあとに開く「最新のメモ」＝ 消すメモを除いた一覧の先頭。
+    // 残りが無ければ未選択に戻す。
+    const nextId = wasSelected
+      ? (visibleNotes.find((n) => n.id !== id)?.id ?? null)
+      : null;
+
     const commit = () => {
       if (permanent) deleteNotePermanently(id);
       else trashNote(id);
       setDeletingId((cur) => (cur === id ? null : cur));
       if (wasSelected) {
-        // 右側は「何も選択していない」状態に戻す
-        setSelectedId((cur) => (cur === id ? null : cur));
-        setFullscreen(false);
+        setSelectedId((cur) => (cur === id ? nextId : cur));
         setClosing(false);
         setBackX(null);
+        // 表示するメモが無くなったら全画面のままだと何も見えなくなる
+        if (!nextId) setFullscreen(false);
       }
     };
 
@@ -465,7 +472,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             }
             className={`flex h-full flex-col ${
               deletingId === selectedNote.id
-                ? "flow-note-collapse"
+                ? "flow-note-delete-out"
                 : backX !== null
                   ? settling
                     ? "flow-drag-settle"
