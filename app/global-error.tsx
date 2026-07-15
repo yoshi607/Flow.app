@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { isChunkLoadError, recoverFromChunkError } from "@/lib/chunkRecovery";
+
 // ルートレイアウトを含めた描画エラーを捕捉し、白画面の代わりに
 // エラー内容を表示する（iOS Safari 等での原因特定のため）
 export default function GlobalError({
@@ -9,6 +12,11 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // 古いビルドのチャンクを取りに行って失敗した場合は取り直して復旧する
+    if (isChunkLoadError(error)) recoverFromChunkError();
+  }, [error]);
+
   return (
     <html lang="ja">
       <body>

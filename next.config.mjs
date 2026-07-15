@@ -10,6 +10,10 @@ const withPWA = withPWAInit({
   dynamicStartUrl: false,
   workboxOptions: {
     disableDevLogs: true,
+    // 新しい Service Worker が有効になったら古いキャッシュを破棄する。
+    // これが無いと、古いビルドのHTMLがキャッシュから返り続け、そこから
+    // 参照される旧チャンクが404になって "Loading chunk N failed" が起きる。
+    cleanupOutdatedCaches: true,
     // ログイン状態によって内容が変わる HTML は常にネットワークを優先しつつ、
     // 電波が悪い環境でもすぐキャッシュ済みシェルへフォールバックできるよう
     // タイムアウトを短めに設定する。

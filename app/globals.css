@@ -83,32 +83,15 @@ body {
 }
 /* ===== 音声メモのコールアウト（文字起こしブロック） ===== */
 .ProseMirror div[data-type="transcript"] {
-  @apply relative my-3 rounded-xl border border-brand-200 bg-brand-50 py-3 pl-11 pr-3 dark:border-neutral-700 dark:bg-neutral-900;
-}
-/* 左肩のマイクアイコン */
-.ProseMirror div[data-type="transcript"]::before {
-  content: "🎤";
-  @apply absolute left-3 top-2.5 text-base leading-none;
+  @apply my-3 rounded-md border border-brand-200 bg-brand-50 px-3 py-3 dark:border-neutral-700 dark:bg-neutral-900;
 }
 .ProseMirror div[data-type="transcript"] > p:last-child {
   margin-bottom: 0;
 }
-/* 録音中は色を変え、アイコンを点滅させて「収録中」だと分かるようにする */
+/* 録音中は枠と背景を赤にして「収録中」だと分かるようにする
+   （経過時間と停止ボタンは画面下部の録音バー側に出る） */
 .ProseMirror div[data-type="transcript"][data-recording="true"] {
   @apply border-red-300 bg-red-50 dark:border-red-500/40 dark:bg-red-500/10;
-}
-.ProseMirror div[data-type="transcript"][data-recording="true"]::before {
-  content: "🔴";
-  animation: flow-rec-blink 1.2s ease-in-out infinite;
-}
-@keyframes flow-rec-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.25;
-  }
 }
 
 .ProseMirror p.is-editor-empty:first-child::before,
