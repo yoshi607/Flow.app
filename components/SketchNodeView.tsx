@@ -12,7 +12,29 @@ import {
   strokeNear,
   type Stroke,
 } from "@/lib/sketch/strokes";
-import { IconTrash } from "./icons";
+import { IconEraser, IconTrash } from "./icons";
+
+// 色・太さの選択ポップアップ（本文のツールバーと同じ作りに揃えている）
+function Popover({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      {/* flow-menu-in は右上を起点にするので、左寄せのこちらは起点を合わせ直す */}
+      <div
+        style={{ transformOrigin: "top left" }}
+        className="flow-menu-in absolute left-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
+      >
+        {children}
+      </div>
+    </>
+  );
+}
 
 const PEN_COLORS = ["#1C1C1E", "#007AFF", "#00C7BE", "#FF9500", "#FF2D55", "#AF52DE"];
 const PEN_WIDTHS = [2, 4, 8];
@@ -47,6 +69,9 @@ export default function SketchNodeView({
   const [color, setColor] = useState(PEN_COLORS[0]);
   const [width, setWidth] = useState(PEN_WIDTHS[1]);
   const [erasing, setErasing] = useState(false);
+  // 開いている選択ポップアップ
+  const [openMenu, setOpenMenu] = useState<"color" | "width" | null>(null);
+  const closeMenu = useCallback(() => setOpenMenu(null), []);
   // 表示上の幅(CSS px)。幅が変わったら描き直す
   const [cssW, setCssW] = useState(0);
 
@@ -257,8 +282,15 @@ export default function SketchNodeView({
   }, [editor, getPos]);
 
   const exitDraw = useCallback(() => {
+    setOpenMenu(null);
     updateAttributes({ drawing: false });
   }, [updateAttributes]);
+
+  // 描いた内容ごと消えるので確認する
+  const confirmDelete = useCallback(() => {
+    if (!window.confirm("この手書きを削除しますか？（元に戻せません）")) return;
+    deleteNode();
+  }, [deleteNode]);
 
   // 入力の購読は描画モードの間だけ（実処理は上の handlers.current を読む）
   useEffect(() => {
@@ -279,10 +311,11 @@ export default function SketchNodeView({
     >
       {editable && !drawing && (
         <div className="flex items-center gap-2 px-2 py-1.5">
+          {/* 「描く」「完了」は押し間違えないよう他より一回り大きくする */}
           <button
             type="button"
             onClick={enterDraw}
-            className="flow-press rounded-lg bg-brand-100 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
+            className="flow-press rounded-lg bg-brand-100 px-4 py-1.5 text-sm font-medium text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
             title="ペンで書き込みます（この間は文字入力を止めます）"
           >
             描く
@@ -293,87 +326,134 @@ export default function SketchNodeView({
           <div className="flex-1" />
           <button
             type="button"
-            onClick={() => deleteNode()}
+            onClick={confirmDelete}
             className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
             title="この手書きを削除"
             aria-label="この手書きを削除"
           >
-            <IconTrash className="h-4 w-4" />
+            <IconTrash className="h-5 w-5" />
           </button>
         </div>
       )}
 
       {editable && drawing && (
         <div className="flex flex-wrap items-center gap-2 px-2 py-1.5">
-          <div className="flex items-center gap-1.5">
-            {PEN_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => {
-                  setColor(c);
-                  setErasing(false);
-                }}
-                className={`h-5 w-5 shrink-0 rounded-full ring-offset-2 transition dark:ring-offset-neutral-950 ${
-                  !erasing && color === c ? "ring-2 ring-neutral-400" : ""
-                }`}
-                style={{ backgroundColor: c }}
-                title="ペンの色"
+          {/* 色（1つのボタンにまとめ、タップで色選択） */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setOpenMenu((v) => (v === "color" ? null : "color"))}
+              title="ペンの色"
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
+                openMenu === "color"
+                  ? "bg-brand-200 dark:bg-neutral-700"
+                  : "hover:bg-brand-100 dark:hover:bg-neutral-800"
+              }`}
+            >
+              <span
+                className="h-5 w-5 rounded-full border-2 border-black/30 dark:border-white/40"
+                style={{ backgroundColor: color }}
               />
-            ))}
+            </button>
+            {openMenu === "color" && (
+              <Popover onClose={closeMenu}>
+                {PEN_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      setColor(c);
+                      setErasing(false);
+                      closeMenu();
+                    }}
+                    title="ペンの色"
+                    className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 transition dark:ring-offset-neutral-900 ${
+                      color === c ? "ring-2 ring-neutral-400" : ""
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </Popover>
+            )}
           </div>
 
-          <div className="flex items-center gap-1 rounded-lg bg-brand-100 p-0.5 dark:bg-neutral-800">
-            {PEN_WIDTHS.map((w) => (
-              <button
-                key={w}
-                type="button"
-                onClick={() => {
-                  setWidth(w);
-                  setErasing(false);
-                }}
-                className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
-                  !erasing && width === w
-                    ? "bg-white shadow-sm dark:bg-neutral-950"
-                    : "text-neutral-500"
-                }`}
-                title={`太さ ${w}`}
-              >
-                <span
-                  className="rounded-full bg-current"
-                  style={{ width: w + 2, height: w + 2 }}
-                />
-              </button>
-            ))}
+          {/* 太さ（1つのボタンにまとめ、タップで太さ選択） */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setOpenMenu((v) => (v === "width" ? null : "width"))}
+              title="線の太さ"
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
+                openMenu === "width"
+                  ? "bg-brand-200 dark:bg-neutral-700"
+                  : "hover:bg-brand-100 dark:hover:bg-neutral-800"
+              }`}
+            >
+              <span
+                className="rounded-full bg-current text-neutral-600 dark:text-neutral-300"
+                style={{ width: width + 3, height: width + 3 }}
+              />
+            </button>
+            {openMenu === "width" && (
+              <Popover onClose={closeMenu}>
+                {PEN_WIDTHS.map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => {
+                      setWidth(w);
+                      setErasing(false);
+                      closeMenu();
+                    }}
+                    title={`太さ ${w}`}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
+                      width === w
+                        ? "bg-brand-200 dark:bg-neutral-700"
+                        : "hover:bg-brand-100 dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    <span
+                      className="rounded-full bg-current text-neutral-600 dark:text-neutral-300"
+                      style={{ width: w + 3, height: w + 3 }}
+                    />
+                  </button>
+                ))}
+              </Popover>
+            )}
           </div>
 
+          {/* 消しゴム（なぞった線を消す） */}
           <button
             type="button"
-            onClick={() => setErasing((v) => !v)}
-            className={`rounded-lg px-2 py-1 text-xs transition ${
+            onClick={() => {
+              setErasing((v) => !v);
+              closeMenu();
+            }}
+            title="なぞった線を消します"
+            aria-label="消しゴム"
+            className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
               erasing
                 ? "bg-brand-200 text-brand-700 dark:bg-neutral-700 dark:text-neutral-100"
                 : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
             }`}
-            title="なぞった線を消します"
           >
-            消しゴム
+            <IconEraser className="h-5 w-5" />
           </button>
 
           <div className="flex-1" />
           <button
             type="button"
-            onClick={() => deleteNode()}
+            onClick={confirmDelete}
             className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
             title="この手書きを削除"
             aria-label="この手書きを削除"
           >
-            <IconTrash className="h-4 w-4" />
+            <IconTrash className="h-5 w-5" />
           </button>
           <button
             type="button"
             onClick={exitDraw}
-            className="flow-press rounded-lg bg-brand-500 px-3 py-1 text-xs font-medium text-white hover:bg-brand-600"
+            className="flow-press rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
             title="文字入力に戻ります"
           >
             完了

@@ -201,6 +201,13 @@ export const IconPencil = ({ className = base }: P) => (
   </svg>
 );
 
+export const IconEraser = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15.5 3.5 21 9a1.5 1.5 0 0 1 0 2.1l-8.4 8.4H8.5l-5-5a1.5 1.5 0 0 1 0-2.1l9-9a1.5 1.5 0 0 1 2.1 0Z" />
+    <path d="m8.5 8.5 7 7M4 21h16" />
+  </svg>
+);
+
 export const IconSettings = ({ className = base }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
