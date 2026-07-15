@@ -13,7 +13,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  // 貼り付け時に混入しがちな前後の空白・改行を除去（そのままだと認証に失敗する）
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     return NextResponse.json(
       { error: "ANTHROPIC_API_KEY が設定されていません" },

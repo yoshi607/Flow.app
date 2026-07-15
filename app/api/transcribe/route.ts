@@ -17,7 +17,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+  // 貼り付け時に混入しがちな前後の空白・改行を除去（そのままだと Groq が 401 を返す）
+  const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!apiKey) {
     return NextResponse.json(
       { error: "GROQ_API_KEY が設定されていません（.env.local を確認してください）" },
