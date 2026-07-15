@@ -14,6 +14,14 @@ export interface SwipeAction {
 
 const ACTION_WIDTH = 72; // 1アクションあたりの幅(px)
 
+// --- トラックパッド(2本指スクロール)の効き具合。数値を上げるほど敏感になる ---
+// スクロール量に対して実際に開く量の比率（1.0 で等倍＝かなり敏感）
+const WHEEL_SENSITIVITY = 0.4;
+// 横方向が縦方向のこの倍率を超えたときだけ反応する（縦スクロール中の誤爆防止）
+const WHEEL_AXIS_RATIO = 1.5;
+// 横に累計これだけ動くまでは開き始めない（触れただけで開かないための「あそび」）
+const WHEEL_START_PX = 30;
+
 // 左スワイプで右側にアクション（共有・移動・削除など）を表示する行（⑥）。
 // タッチ端末でのみジェスチャーを有効化し、非タッチ端末では
 // そのまま children を表示する（右クリック等は各画面の別UIで対応）。
@@ -35,6 +43,8 @@ export default function SwipeRow({
   const axis = useRef<"none" | "x" | "y">("none");
   const rowRef = useRef<HTMLDivElement>(null);
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 「あそび」判定用に、今回のスクロールで横に動いた累計量
+  const wheelAccum = useRef(0);
   // 最新の offset をリスナーから読むための控え
   const offsetRef = useRef(0);
   offsetRef.current = offset;
@@ -49,19 +59,28 @@ export default function SwipeRow({
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
-      // 横方向の意図があるときだけ反応（縦スクロールは邪魔しない）
-      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      // 明確に横方向のときだけ反応（縦スクロールは邪魔しない）
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * WHEEL_AXIS_RATIO) return;
       e.preventDefault();
 
-      let next = offsetRef.current - e.deltaX;
-      if (next > 0) next = 0;
-      if (next < -openWidth) next = -openWidth;
-      setDragging(true); // 追従中はアニメーションを切る
-      setOffset(next);
+      // 開き始めるまでの「あそび」。少し触れただけでは動かさない。
+      // 既に開いている最中はそのまま追従させる。
+      wheelAccum.current += e.deltaX;
+      const engaged =
+        offsetRef.current !== 0 || Math.abs(wheelAccum.current) > WHEEL_START_PX;
+
+      if (engaged) {
+        let next = offsetRef.current - e.deltaX * WHEEL_SENSITIVITY;
+        if (next > 0) next = 0;
+        if (next < -openWidth) next = -openWidth;
+        setDragging(true); // 追従中はアニメーションを切る
+        setOffset(next);
+      }
 
       // スクロールが止まったら開/閉にスナップする
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
       wheelTimer.current = setTimeout(() => {
+        wheelAccum.current = 0;
         setDragging(false);
         setOffset(offsetRef.current < -openWidth / 2 ? -openWidth : 0);
       }, 140);
