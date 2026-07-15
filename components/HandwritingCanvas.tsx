@@ -31,6 +31,8 @@ export default function HandwritingCanvas({
   const activeId = useRef<number | null>(null);
   // 今の筆が始まった時刻（遅れて届いた古い筆の pointerup を捨てるため）
   const strokeStart = useRef(0);
+  // 今の筆で描画した move の回数（調査用）
+  const moves = useRef(0);
 
   const [color, setColor] = useState(PEN_COLORS[0]);
   const [width, setWidth] = useState(PEN_WIDTHS[1]);
@@ -123,6 +125,7 @@ export default function HandwritingCanvas({
       drawing.current = true;
       activeId.current = e.pointerId;
       strokeStart.current = e.timeStamp;
+      moves.current = 0;
       const p = pointOf(e);
       last.current = p;
       log(`down id=${e.pointerId} ${e.pointerType}`);
@@ -136,10 +139,37 @@ export default function HandwritingCanvas({
     };
 
     const onMove = (e: PointerEvent) => {
-      if (!drawing.current) return;
-      // 描画中の筆以外（別の指など）は無視
-      if (activeId.current !== null && e.pointerId !== activeId.current) return;
       if (!shouldDraw(e)) return;
+
+      // 【重要】down/up の記録だけに頼らず、「今ペンが実際に触れているか」を
+      // buttons / pressure で判断する。iOS では画の途中で pointerup が
+      // 届いてしまうことがあり、それ以降の move が全て無視されて
+      // 「点しか描かれない＝2画目が反応しない」状態になっていた。
+      const pressed =
+        e.buttons > 0 || (e.pointerType !== "mouse" && e.pressure > 0);
+
+      if (!pressed) {
+        // ペンが浮いている（ホバー移動）→ 筆を終える
+        if (drawing.current && activeId.current === e.pointerId) {
+          drawing.current = false;
+          activeId.current = null;
+          last.current = null;
+        }
+        return;
+      }
+
+      // 触れているのに筆が始まっていない（up の誤検知・取りこぼし）→
+      // ここから筆を再開する。これにより画が途中で切れなくなる。
+      if (!drawing.current || activeId.current !== e.pointerId) {
+        drawing.current = true;
+        activeId.current = e.pointerId;
+        strokeStart.current = e.timeStamp;
+        last.current = pointOf(e);
+        moves.current = 0;
+        log(`move:再開 id=${e.pointerId}`);
+        return;
+      }
+
       e.preventDefault();
       if (!last.current) {
         last.current = pointOf(e);
@@ -159,6 +189,7 @@ export default function HandwritingCanvas({
         ctx.stroke();
         last.current = p;
       }
+      moves.current++;
       dirty.current = true;
     };
 
@@ -177,7 +208,8 @@ export default function HandwritingCanvas({
       drawing.current = false;
       activeId.current = null;
       last.current = null;
-      log(`up id=${e.pointerId} ${e.pointerType}`);
+      // moves=0 なら「move が届いていない」＝点しか描けていない証拠
+      log(`up id=${e.pointerId} moves=${moves.current}`);
     };
 
     // pointercancel は「遅れて届いた古いup」判定を適用せず、確実に筆を終える
