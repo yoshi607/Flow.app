@@ -98,6 +98,10 @@ body {
 .ProseMirror div[data-type="sketch"] {
   @apply my-3 overflow-hidden rounded-md border border-brand-200 bg-white dark:border-neutral-700 dark:bg-neutral-900;
 }
+/* 描画中は文字入力が止まっているので、それが分かるようにする */
+.ProseMirror div[data-type="sketch"][data-drawing="true"] {
+  @apply border-brand-400 ring-2 ring-brand-400/40 dark:border-brand-500;
+}
 /* 中身を持たないノードなので、プレースホルダーの疑似要素が漏れないようにする */
 .ProseMirror div[data-type="sketch"]::before,
 .ProseMirror div[data-type="sketch"]::after {

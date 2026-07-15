@@ -12,13 +12,20 @@ import SketchNodeView from "@/components/SketchNodeView";
 //
 // 線データは data-strokes に JSON で入る。画像ではなく線で持つ理由は
 // lib/sketch/strokes.ts の冒頭を参照。
-export const Sketch = Node.create({
+export const Sketch = Node.create<{ editable: boolean }>({
   name: "sketch",
   group: "block",
   // 中身は持たない。描画は NodeView（キャンバス）が担当する
   atom: true,
   selectable: true,
   draggable: false,
+
+  addOptions() {
+    // 本文が編集可能か（ゴミ箱のメモでは false）。
+    // ※ 描画中は editor.setEditable(false) でエディタ自体を編集不可にするため、
+    //   editor.isEditable は「描画中か」で揺れる。ブロック側の判定には使えない。
+    return { editable: true };
+  },
 
   addAttributes() {
     return {
@@ -38,6 +45,15 @@ export const Sketch = Node.create({
         default: 0,
         parseHTML: (el) => Number(el.getAttribute("data-w")) || 0,
         renderHTML: (attrs) => ({ "data-w": String(attrs.w ?? 0) }),
+      },
+      // 描画モード中か。
+      // 【重要】本文には保存しない一時的な状態なので renderHTML は空を返し、
+      // 読み込み時は必ず false から始める（renderHTML/parseHTML を実装する意味は
+      // ここにある。属性を素通しにすると data-drawing が本文に焼き付いてしまう）。
+      drawing: {
+        default: false,
+        parseHTML: () => false,
+        renderHTML: () => ({}),
       },
     };
   },

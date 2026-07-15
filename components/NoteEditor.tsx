@@ -162,7 +162,9 @@ export default function NoteEditor({
         listKeymap: false,
       }),
       TranscriptCallout,
-      Sketch,
+      // 描画中は editor.setEditable(false) でエディタごと編集不可にするため、
+      // ブロック側は editor.isEditable ではなくこの値で判定する
+      Sketch.configure({ editable: !trashed }),
       TextStyle,
       Color,
       Placeholder.configure({
@@ -192,7 +194,9 @@ export default function NoteEditor({
       // 後ろに空段落を足す。手書きブロックは中身を持たないため、末尾に置くと
       // 続きを入力する場所が無くなってしまう（iPadでは特に困る）
       .insertContent([
-        { type: "sketch", attrs: { strokes: "[]", h: 220, w: 0 } },
+        // 挿入直後はそのまま描けるよう描画モードで始める（drawing は本文に
+        // 保存されない一時的な属性）
+        { type: "sketch", attrs: { strokes: "[]", h: 220, w: 0, drawing: true } },
         { type: "paragraph" },
       ])
       .run();

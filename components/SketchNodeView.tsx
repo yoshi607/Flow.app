@@ -33,9 +33,16 @@ export default function SketchNodeView({
   updateAttributes,
   deleteNode,
   editor,
+  extension,
+  getPos,
 }: NodeViewProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // 本文が編集可能か。editor.isEditable は描画中に false になるので使えない
+  const editable: boolean = extension.options.editable !== false;
+  // 描画モード中か（本文には保存されない一時的な状態）
+  const drawing: boolean = node.attrs.drawing === true;
 
   const [color, setColor] = useState(PEN_COLORS[0]);
   const [width, setWidth] = useState(PEN_WIDTHS[1]);
@@ -218,26 +225,85 @@ export default function SketchNodeView({
     },
   };
 
-  // 入力の購読はマウント時に1回だけ（実処理は上の handlers.current を読む）
+  // --- 描画モード -------------------------------------------------------
+  // 【重要】iPadOS の「スクリブル」は、Apple Pencil の手書きをテキスト入力として
+  // 認識し、一番近い編集可能な場所へ挿入する。キャンバス側に
+  // contenteditable="false" を付けても、スクリブルは近くの編集可能な場所を
+  // 探して吸い付くため防げない（実機で確認：認識結果がブロックの下の段落に
+  // 入ってしまう）。エディタ自体を編集不可にするのが唯一の確実な方法。
+  useEffect(() => {
+    if (!editable || !drawing) return;
+    editor.setEditable(false, false); // 第2引数 false: 余計な保存を走らせない
+    return () => {
+      // 描画中にメモを切り替えるとエディタごと破棄される
+      if (!editor.isDestroyed) editor.setEditable(true, false);
+    };
+  }, [drawing, editable, editor]);
+
+  // 描画モードに入る。他の手書きブロックは描画モードから抜けさせる
+  const enterDraw = useCallback(() => {
+    const myPos = typeof getPos === "function" ? getPos() : null;
+    editor.commands.command(({ tr, state }) => {
+      state.doc.descendants((n, p) => {
+        if (n.type.name !== "sketch") return true;
+        const on = myPos !== null && p === myPos;
+        if (n.attrs.drawing !== on) {
+          tr.setNodeMarkup(p, undefined, { ...n.attrs, drawing: on });
+        }
+        return false;
+      });
+      return true;
+    });
+  }, [editor, getPos]);
+
+  const exitDraw = useCallback(() => {
+    updateAttributes({ drawing: false });
+  }, [updateAttributes]);
+
+  // 入力の購読は描画モードの間だけ（実処理は上の handlers.current を読む）
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    if (!editor.isEditable) return;
+    if (!canvas || !editable || !drawing) return;
     // 本文のスクロール領域（.ProseMirror）を指スクロールの対象にする
     const scroller = canvas.closest(".ProseMirror") as HTMLElement | null;
     return attachPenInput(canvas, handlers, { scroller, viewport: scroller });
-  }, [editor]);
-
-  const editable = editor.isEditable;
+  }, [editable, drawing]);
 
   return (
     <NodeViewWrapper
       as="div"
       data-type="sketch"
+      data-drawing={drawing ? "true" : undefined}
       className="flow-sketch flow-draw-overlay"
       contentEditable={false}
     >
-      {editable && (
+      {editable && !drawing && (
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          <button
+            type="button"
+            onClick={enterDraw}
+            className="flow-press rounded-lg bg-brand-100 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
+            title="ペンで書き込みます（この間は文字入力を止めます）"
+          >
+            描く
+          </button>
+          <span className="text-xs text-neutral-400">
+            {strokesRef.current.length > 0 ? "" : "「描く」を押すと手書きできます"}
+          </span>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => deleteNode()}
+            className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+            title="この手書きを削除"
+            aria-label="この手書きを削除"
+          >
+            <IconTrash className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {editable && drawing && (
         <div className="flex flex-wrap items-center gap-2 px-2 py-1.5">
           <div className="flex items-center gap-1.5">
             {PEN_COLORS.map((c) => (
@@ -304,6 +370,14 @@ export default function SketchNodeView({
           >
             <IconTrash className="h-4 w-4" />
           </button>
+          <button
+            type="button"
+            onClick={exitDraw}
+            className="flow-press rounded-lg bg-brand-500 px-3 py-1 text-xs font-medium text-white hover:bg-brand-600"
+            title="文字入力に戻ります"
+          >
+            完了
+          </button>
         </div>
       )}
 
@@ -311,7 +385,8 @@ export default function SketchNodeView({
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full"
-          style={{ touchAction: "none" }}
+          // 描画中だけタッチを止める。それ以外は本文と同じようにスクロールさせる
+          style={{ touchAction: drawing ? "none" : "auto" }}
         />
       </div>
     </NodeViewWrapper>
