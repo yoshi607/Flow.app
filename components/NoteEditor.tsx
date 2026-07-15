@@ -83,6 +83,18 @@ export default function NoteEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 添付はリアルタイム購読の対象外のため、アプリへ復帰した時に取り直して
+  // 他端末での添付・削除に追いつく
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        listAttachments(supabase, note.id).then(setAttachments);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [supabase, note.id]);
+
   async function handleFilesSelected(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";

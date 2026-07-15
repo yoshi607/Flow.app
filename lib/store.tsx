@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchInitialNotesData } from "@/lib/supabase/queries";
 import {
   type Note,
   type Folder,
@@ -67,6 +68,61 @@ export function NotesProvider({
   const savingIds = useRef<Set<string>>(new Set());
   // 直近にローカル編集した時刻（リアルタイム上書きの誤爆防止）
   const lastEditedAt = useRef<Record<string, number>>({});
+  const refreshing = useRef(false);
+  // 一度でも購読に成功したか（初回とその後の再接続を区別するため）
+  const subscribedOnce = useRef(false);
+
+  // このメモはローカルを優先すべきか（保存中 or 直近3秒に自分が編集した）
+  const keepLocal = useCallback(
+    (id: string) =>
+      savingIds.current.has(id) ||
+      Date.now() - (lastEditedAt.current[id] ?? 0) < 3000,
+    [],
+  );
+
+  // DB から最新を取り直して追いつく。
+  // リアルタイム購読は「切断中に起きた変更」を受け取れないため、
+  // アプリ復帰・再接続・オンライン復帰のタイミングでこれを呼ぶ。
+  const refresh = useCallback(async () => {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    try {
+      const { notes: fresh, folders: freshFolders } =
+        await fetchInitialNotesData(supabase);
+
+      setNotes((prev) => {
+        const prevById = new Map(prev.map((n) => [n.id, n]));
+        // 編集中のメモはサーバー値で上書きしない（入力中の文字が消えるのを防ぐ）
+        const merged = fresh.map((n) =>
+          keepLocal(n.id) ? (prevById.get(n.id) ?? n) : n,
+        );
+        // 取得結果に無い＝他端末で削除済み。ただし編集直後のものは念のため残す
+        const freshIds = new Set(fresh.map((n) => n.id));
+        const localOnly = prev.filter(
+          (n) => !freshIds.has(n.id) && keepLocal(n.id),
+        );
+        return [...localOnly, ...merged];
+      });
+      setFolders(freshFolders);
+    } finally {
+      refreshing.current = false;
+    }
+  }, [supabase, keepLocal]);
+
+  // アプリへ復帰した/オンラインに戻ったときに最新へ追いつく
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("online", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("online", refresh);
+    };
+  }, [refresh]);
 
   // リアルタイム購読（他デバイスの変更を反映）
   useEffect(() => {
@@ -113,12 +169,19 @@ export function NotesProvider({
           });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        // 再接続時は、切断中に取りこぼした変更に追いつくため取り直す。
+        // 初回の購読成功時はサーバー側で先読み済みなのでスキップする。
+        if (status === "SUBSCRIBED") {
+          if (subscribedOnce.current) refresh();
+          subscribedOnce.current = true;
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, userId]);
+  }, [supabase, userId, refresh]);
 
   // ローカル状態を1件更新
   const patchLocal = useCallback((id: string, patch: Partial<Note>) => {
