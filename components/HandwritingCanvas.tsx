@@ -31,8 +31,6 @@ export default function HandwritingCanvas({
   const activeId = useRef<number | null>(null);
   // 今の筆が始まった時刻（遅れて届いた古い筆の pointerup を捨てるため）
   const strokeStart = useRef(0);
-  // 今の筆で描画した move の回数（調査用）
-  const moves = useRef(0);
 
   const [color, setColor] = useState(PEN_COLORS[0]);
   const [width, setWidth] = useState(PEN_WIDTHS[1]);
@@ -41,21 +39,20 @@ export default function HandwritingCanvas({
   // Apple Pencil を持っていない場合はトグルで指描きに切り替え可能。
   const [penOnly, setPenOnly] = useState(true);
 
-  // 【一時的】不具合調査用のイベントログ表示。原因が確定したら削除する。
-  const [debug, setDebug] = useState(false);
-  const [events, setEvents] = useState<string[]>([]);
-
   // 描画設定は ref にも持つ。描画はネイティブのイベントリスナーで行うため、
   // 再購読せずに常に最新の設定を読めるようにするのが目的。
-  const settings = useRef({ color, width, erasing, penOnly, debug });
-  settings.current = { color, width, erasing, penOnly, debug };
+  const settings = useRef({ color, width, erasing, penOnly });
+  settings.current = { color, width, erasing, penOnly };
 
   // キャンバスの初期化と描画イベントの購読（マウント時に1回だけ）。
   //
-  // 【重要】React の合成イベントや setPointerCapture は使わない。
-  // iOS では素早い連続ストローク時に次の pointerdown を取りこぼすこと
-  // があり、「2筆目が反応しない」原因になるため、canvas に直接
-  // ネイティブリスナーを張り、move/up は window で受ける。
+  // iPad + Apple Pencil で「文字の2画目が描けない」不具合の対策として、
+  // 実機ログを取りながら以下の構成に落ち着いている。安易に戻さないこと:
+  //  - React の合成イベントではなくネイティブリスナーを使う
+  //  - setPointerCapture は使わない
+  //  - touchstart/touchmove を preventDefault してSafariのジェスチャー
+  //    認識を止める（これが無いと2画目の pointerdown が発火しない）
+  //  - pointerdown は window のキャプチャで受け、座標で領域内か判定する
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
@@ -71,12 +68,6 @@ export default function HandwritingCanvas({
     ctx.scale(dpr, dpr);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-
-    // 【一時的】デバッグ表示が ON のときだけイベントを記録する
-    const log = (msg: string) => {
-      if (!settings.current.debug) return;
-      setEvents((prev) => [msg, ...prev].slice(0, 14));
-    };
 
     const pointOf = (e: { clientX: number; clientY: number }) => {
       const r = canvas.getBoundingClientRect();
@@ -138,10 +129,8 @@ export default function HandwritingCanvas({
       drawing.current = true;
       activeId.current = e.pointerId;
       strokeStart.current = e.timeStamp;
-      moves.current = 0;
       const p = pointOf(e);
       last.current = p;
-      log(`down id=${e.pointerId} ${e.pointerType}`);
 
       // 押した瞬間に点を打つ（速く短い筆は move がほぼ発生しないため）
       const w = applyStyle(pressureOf(e));
@@ -178,8 +167,6 @@ export default function HandwritingCanvas({
         activeId.current = e.pointerId;
         strokeStart.current = e.timeStamp;
         last.current = pointOf(e);
-        moves.current = 0;
-        log(`move:再開 id=${e.pointerId}`);
         return;
       }
 
@@ -202,7 +189,6 @@ export default function HandwritingCanvas({
         ctx.stroke();
         last.current = p;
       }
-      moves.current++;
       dirty.current = true;
     };
 
@@ -214,15 +200,10 @@ export default function HandwritingCanvas({
       // 【重要】iOS は pointerId を使い回すことがあり、1画目の pointerup が
       // 2画目の pointerdown より遅れて届くと、この筆を誤って終了させてしまう
       // （＝2画目が描けない）。筆の開始より前に発生した up は捨てる。
-      if (e.timeStamp < strokeStart.current) {
-        log(`up(stale) id=${e.pointerId} 無視`);
-        return;
-      }
+      if (e.timeStamp < strokeStart.current) return;
       drawing.current = false;
       activeId.current = null;
       last.current = null;
-      // moves=0 なら「move が届いていない」＝点しか描けていない証拠
-      log(`up id=${e.pointerId} moves=${moves.current}`);
     };
 
     // pointercancel は「遅れて届いた古いup」判定を適用せず、確実に筆を終える
@@ -231,18 +212,12 @@ export default function HandwritingCanvas({
       drawing.current = false;
       activeId.current = null;
       last.current = null;
-      log(`cancel id=${e.pointerId} ${e.pointerType}`);
     };
 
     // 【重要】Safari は Apple Pencil に対して touch-action:none を効かせず、
     // ジェスチャー認識（ダブルタップ等）が働いて2画目の pointerdown を
     // 握りつぶすことがある。ペン/指のタッチ既定動作をここで明示的に止める。
     const blockTouch = (e: TouchEvent) => e.preventDefault();
-
-    // 【一時的】フィルタ前の生の pointerdown を記録して、
-    // 「イベント自体が届いていないのか / 種別で弾いているのか」を確定させる
-    const rawDown = (e: PointerEvent) => log(`RAW down ${e.pointerType}`);
-    window.addEventListener("pointerdown", rawDown, true);
 
     // pointerdown も window のキャプチャで受ける（要素へのリターゲットや
     // 途中での stopPropagation に影響されないようにするため）
@@ -258,7 +233,6 @@ export default function HandwritingCanvas({
     window.addEventListener("pointercancel", onCancel);
 
     return () => {
-      window.removeEventListener("pointerdown", rawDown, true);
       window.removeEventListener("pointerdown", onDown, true);
       canvas.removeEventListener("touchstart", blockTouch);
       canvas.removeEventListener("touchmove", blockTouch);
@@ -380,21 +354,6 @@ export default function HandwritingCanvas({
         </button>
 
         <div className="flex-1" />
-        {/* 【一時的】不具合調査用。原因が確定したら削除する */}
-        <button
-          onClick={() => {
-            setEvents([]);
-            setDebug((v) => !v);
-          }}
-          title="デバッグ表示"
-          className={`rounded-lg px-2 py-1.5 text-sm transition ${
-            debug
-              ? "bg-brand-200 text-brand-700 dark:bg-neutral-700 dark:text-neutral-100"
-              : "text-neutral-400 hover:bg-brand-100 dark:hover:bg-neutral-800"
-          }`}
-        >
-          🐞
-        </button>
         <button
           onClick={save}
           className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
@@ -411,16 +370,6 @@ export default function HandwritingCanvas({
           className="absolute inset-0 h-full w-full"
           style={{ touchAction: "none" }}
         />
-        {/* 【一時的】受け取ったポインタイベントの記録 */}
-        {debug && (
-          <div className="pointer-events-none absolute right-2 top-2 max-h-[60%] w-56 overflow-hidden rounded-lg bg-black/75 p-2 font-mono text-[10px] leading-tight text-green-300">
-            {events.length === 0 ? (
-              <div>ここに書くとイベントが出ます</div>
-            ) : (
-              events.map((line, i) => <div key={i}>{line}</div>)
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
