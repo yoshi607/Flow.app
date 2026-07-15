@@ -27,6 +27,8 @@ export default function HandwritingCanvas({
   const last = useRef<{ x: number; y: number } | null>(null);
   const penSeen = useRef(false);
   const dirty = useRef(false);
+  // 現在描画中のポインタID（他の指の混入を無視するため）
+  const activeId = useRef<number | null>(null);
 
   const [color, setColor] = useState(PEN_COLORS[0]);
   const [width, setWidth] = useState(PEN_WIDTHS[1]);
@@ -35,120 +37,137 @@ export default function HandwritingCanvas({
   // Apple Pencil を持っていない場合はトグルで指描きに切り替え可能。
   const [penOnly, setPenOnly] = useState(true);
 
-  // キャンバスをコンテナサイズ×DPRで用意（にじみ防止）。既存の描画は保持しない。
+  // 描画設定は ref にも持つ。描画はネイティブのイベントリスナーで行うため、
+  // 再購読せずに常に最新の設定を読めるようにするのが目的。
+  const settings = useRef({ color, width, erasing, penOnly });
+  settings.current = { color, width, erasing, penOnly };
+
+  // キャンバスの初期化と描画イベントの購読（マウント時に1回だけ）。
+  //
+  // 【重要】React の合成イベントや setPointerCapture は使わない。
+  // iOS では素早い連続ストローク時に次の pointerdown を取りこぼすこと
+  // があり、「2筆目が反応しない」原因になるため、canvas に直接
+  // ネイティブリスナーを張り、move/up は window で受ける。
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
     if (!canvas || !wrap) return;
+
+    // コンテナサイズ×DPRで用意（にじみ防止）
     const dpr = window.devicePixelRatio || 1;
-    const rect = wrap.getBoundingClientRect();
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
+    const rect0 = wrap.getBoundingClientRect();
+    canvas.width = Math.round(rect0.width * dpr);
+    canvas.height = Math.round(rect0.height * dpr);
     const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.scale(dpr, dpr);
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-    }
-  }, []);
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
 
-  function pointFromEvent(e: React.PointerEvent) {
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  }
+    const pointOf = (e: { clientX: number; clientY: number }) => {
+      const r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
 
-  function shouldDraw(e: React.PointerEvent) {
-    if (e.pointerType === "pen") {
-      penSeen.current = true;
+    const pressureOf = (e: { pressure: number }) =>
+      e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+
+    const shouldDraw = (e: PointerEvent) => {
+      if (e.pointerType === "pen") {
+        penSeen.current = true;
+        return true;
+      }
+      if (e.pointerType === "mouse") return true; // PCでの確認用
+      // touch（指・手のひら）:
+      //  - ペンのみモード（既定）では一切描かない＝手のひら誤爆を完全に防ぐ
+      //  - ペンが一度でも使われたら、以後 touch は無視
+      if (settings.current.penOnly) return false;
+      if (penSeen.current) return false;
       return true;
-    }
-    if (e.pointerType === "mouse") return true; // PCでの確認用
-    // touch（指・手のひら）:
-    //  - ペンのみモード（既定）では一切描かない＝手のひら誤爆を完全に防ぐ
-    //  - ペンが一度でも使われたら、以後 touch は無視
-    if (penOnly) return false;
-    if (penSeen.current) return false;
-    return true;
-  }
+    };
 
-  // 現在のペン設定を ctx に反映し、線幅を返す
-  function applyStyle(ctx: CanvasRenderingContext2D, pressure: number) {
-    if (erasing) {
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.strokeStyle = "rgba(0,0,0,1)";
-      ctx.fillStyle = "rgba(0,0,0,1)";
-      ctx.lineWidth = width * 4;
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      // 筆圧があれば太さに反映（0.5〜1.5倍）
-      ctx.lineWidth = width * (0.5 + pressure);
-    }
-    return ctx.lineWidth;
-  }
+    // 現在のペン設定を ctx に反映し、線幅を返す
+    const applyStyle = (pressure: number) => {
+      const { erasing, color, width } = settings.current;
+      if (erasing) {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        ctx.lineWidth = width * 4;
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        // 筆圧があれば太さに反映（0.5〜1.5倍）
+        ctx.lineWidth = width * (0.5 + pressure);
+      }
+      return ctx.lineWidth;
+    };
 
-  function pressureOf(e: { pressure: number }) {
-    return e.pressure && e.pressure > 0 ? e.pressure : 0.5;
-  }
-
-  function onPointerDown(e: React.PointerEvent) {
-    if (!shouldDraw(e)) return;
-    e.preventDefault();
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    drawing.current = true;
-    const p = pointFromEvent(e);
-    last.current = p;
-
-    // 押した瞬間に点を打つ。これが無いと、素早く短く書いた筆
-    // （pointermove がほとんど発生しない）が描画されず「反応しない」
-    // ように見えてしまう。
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    const w = applyStyle(ctx, pressureOf(e));
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, w / 2, 0, Math.PI * 2);
-    ctx.fill();
-    dirty.current = true;
-  }
-
-  function onPointerMove(e: React.PointerEvent) {
-    if (!drawing.current || !shouldDraw(e)) return;
-    e.preventDefault();
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    if (!last.current) {
-      last.current = pointFromEvent(e);
-      return;
-    }
-
-    // 速く書くと pointermove が間引かれるため、ブラウザが保持している
-    // 中間点(coalesced events)も含めて全て描き、線の取りこぼしを防ぐ
-    const native = e.nativeEvent;
-    const points =
-      typeof native.getCoalescedEvents === "function"
-        ? native.getCoalescedEvents()
-        : [native];
-
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    for (const pe of points.length > 0 ? points : [native]) {
-      const p = { x: pe.clientX - rect.left, y: pe.clientY - rect.top };
-      applyStyle(ctx, pressureOf(pe));
-      ctx.beginPath();
-      ctx.moveTo(last.current!.x, last.current!.y);
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
+    const onDown = (e: PointerEvent) => {
+      if (!shouldDraw(e)) return;
+      e.preventDefault();
+      // 前の筆が pointerup を取りこぼしていても、必ず新しい筆として開始する
+      drawing.current = true;
+      activeId.current = e.pointerId;
+      const p = pointOf(e);
       last.current = p;
-    }
-    dirty.current = true;
-  }
 
-  function onPointerUp() {
-    drawing.current = false;
-    last.current = null;
-  }
+      // 押した瞬間に点を打つ（速く短い筆は move がほぼ発生しないため）
+      const w = applyStyle(pressureOf(e));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(w / 2, 0.5), 0, Math.PI * 2);
+      ctx.fill();
+      dirty.current = true;
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!drawing.current) return;
+      // 描画中の筆以外（別の指など）は無視
+      if (activeId.current !== null && e.pointerId !== activeId.current) return;
+      if (!shouldDraw(e)) return;
+      e.preventDefault();
+      if (!last.current) {
+        last.current = pointOf(e);
+        return;
+      }
+      // 速く書くと move が間引かれるため、中間点(coalesced events)も全て描く
+      const points =
+        typeof e.getCoalescedEvents === "function"
+          ? e.getCoalescedEvents()
+          : [];
+      for (const pe of points.length > 0 ? points : [e]) {
+        const p = pointOf(pe);
+        applyStyle(pressureOf(pe));
+        ctx.beginPath();
+        ctx.moveTo(last.current!.x, last.current!.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        last.current = p;
+      }
+      dirty.current = true;
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (activeId.current !== null && e.pointerId !== activeId.current) return;
+      drawing.current = false;
+      activeId.current = null;
+      last.current = null;
+    };
+
+    canvas.addEventListener("pointerdown", onDown, { passive: false });
+    // move/up は window で受ける（指が要素外へ出ても筆が途切れないように）
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+
+    return () => {
+      canvas.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
 
   function clearCanvas() {
     const canvas = canvasRef.current;
@@ -272,15 +291,11 @@ export default function HandwritingCanvas({
 
       {/* 描画エリア */}
       <div ref={wrapRef} className="relative flex-1 touch-none bg-white">
+        {/* 描画イベントは useEffect 内でネイティブに購読している */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full"
           style={{ touchAction: "none" }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerLeave={onPointerUp}
-          onPointerCancel={onPointerUp}
         />
       </div>
     </div>
