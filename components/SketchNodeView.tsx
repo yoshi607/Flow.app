@@ -259,6 +259,20 @@ export default function SketchNodeView({
   useEffect(() => {
     if (!editable || !drawing) return;
     editor.setEditable(false, false); // 第2引数 false: 余計な保存を走らせない
+
+    // 編集不可にするだけでは足りない。iOS は「文字入力セッション」＝フォーカスと
+    // キャレットが残っているとそこへスクリブルの認識結果を書き込んでしまうため、
+    // 明示的に外す。
+    const dom = editor.view.dom as HTMLElement;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && (active === dom || dom.contains(active))) {
+      active.blur();
+    }
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && dom.contains(sel.anchorNode)) {
+      sel.removeAllRanges();
+    }
+
     return () => {
       // 描画中にメモを切り替えるとエディタごと破棄される
       if (!editor.isDestroyed) editor.setEditable(true, false);

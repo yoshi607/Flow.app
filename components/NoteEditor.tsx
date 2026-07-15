@@ -190,9 +190,13 @@ export default function NoteEditor({
     if (!editor) return;
     editor
       .chain()
-      .focus()
-      // 後ろに空段落を足す。手書きブロックは中身を持たないため、末尾に置くと
-      // 続きを入力する場所が無くなってしまう（iPadでは特に困る）
+      // 【重要】ここで focus() を呼んではいけない。iOS では focus コマンドが
+      // view.dom.focus() を呼んだうえ、requestAnimationFrame でもう一度
+      // view.focus() を後追いする。そのため描画モードで editable を false に
+      // した「後」にフォーカスが戻り、文字入力セッションが生きたままになって
+      // スクリブルが手書きを文字認識してしまう
+      // （実機で「挿入直後だけ文字認識される」原因がこれだった）。
+      // insertContent は DOM フォーカスが無くても現在の選択位置に挿入される。
       .insertContent([
         // 挿入直後はそのまま描けるよう描画モードで始める（drawing は本文に
         // 保存されない一時的な属性）
