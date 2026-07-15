@@ -49,15 +49,17 @@ function Countdown({ note }: { note: Note }) {
 
 // ＋ボタン：タップで外側へ広がるリングを一度だけ再生してから onCreate を呼ぶ。
 // 粒子を飛ばすような派手な演出はせず、control 一点から広がる感覚だけを残す。
-function CreateButton({ onCreate }: { onCreate: () => void }) {
+// このボタンの位置を onCreate へ渡し、本文側を「このボタンから育った」ように
+// 展開させる（実際の変形は AppShell 側で行う）。
+function CreateButton({ onCreate }: { onCreate: (origin: DOMRect) => void }) {
   const [rings, setRings] = useState<number[]>([]);
 
-  function handleClick() {
+  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
     const id = Date.now();
     setRings((r) => [...r, id]);
     // アニメーション終了後に要素を片付ける
     window.setTimeout(() => setRings((r) => r.filter((x) => x !== id)), 500);
-    onCreate();
+    onCreate(e.currentTarget.getBoundingClientRect());
   }
 
   return (
@@ -88,6 +90,8 @@ export default function NoteList({
   onSelect,
   onCreate,
   onOpenMenu,
+  onNoteRemoved,
+  poppedId = null,
   sidebarCollapsed = false,
 }: {
   notes: Note[];
@@ -97,8 +101,12 @@ export default function NoteList({
   selectedId: string | null;
   onQueryChange: (q: string) => void;
   onSelect: (id: string) => void;
-  onCreate: () => void;
+  onCreate: (origin: DOMRect) => void;
   onOpenMenu: () => void;
+  /** 一覧から消えた（削除された）メモを知らせる */
+  onNoteRemoved: (id: string) => void;
+  /** 作成直後のメモ。上から「ぽんっ」と出す演出に使う */
+  poppedId?: string | null;
   sidebarCollapsed?: boolean;
 }) {
   const {
@@ -129,8 +137,12 @@ export default function NoteList({
           icon: <IconTrash />,
           className: "bg-red-600",
           onClick: () => {
-            if (window.confirm("このメモを完全に削除しますか？（元に戻せません）"))
+            if (
+              window.confirm("このメモを完全に削除しますか？（元に戻せません）")
+            ) {
               deleteNotePermanently(note.id);
+              onNoteRemoved(note.id);
+            }
           },
         },
       ];
@@ -155,7 +167,10 @@ export default function NoteList({
         label: "削除",
         icon: <IconTrash />,
         className: "bg-red-600",
-        onClick: () => trashNote(note.id),
+        onClick: () => {
+          trashNote(note.id);
+          onNoteRemoved(note.id);
+        },
       },
     ];
   }
@@ -236,7 +251,9 @@ export default function NoteList({
             <SwipeRow
               key={note.id}
               actions={actionsFor(note)}
-              className="mb-1 rounded-2xl"
+              className={`mb-1 rounded-2xl ${
+                poppedId === note.id ? "flow-note-pop" : ""
+              }`}
             >
             <button
               onClick={() => onSelect(note.id)}

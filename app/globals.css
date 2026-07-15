@@ -166,6 +166,26 @@ body {
   animation: flow-burst-ring 0.45s var(--ease-out) forwards;
 }
 
+/* 新しいメモが一覧に加わるとき、上から軽く落ちてきて収まる
+   （iOS の通知バナーのような出方）。押した瞬間に結果が現れる感覚を出すため、
+   不透明度は前半で立ち上げ、位置だけを最後まで整える。 */
+@keyframes flow-note-pop {
+  0% {
+    transform: translateY(-16px) scale(0.97);
+    opacity: 0;
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+.flow-note-pop {
+  animation: flow-note-pop 380ms var(--ease-spring);
+}
+
 /* ===== 3. メモを開く／戻る（モバイル） =====
    開く: 右からスライドイン。動き始めは速く、終わりで減速する。
    戻る: 逆再生。ただし体感で約20%短くして「軽さ」を出す。 */

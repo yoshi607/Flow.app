@@ -23,6 +23,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [fullscreen, setFullscreen] = useState(false);
   // 戻るアニメーション再生中（モバイル）
   const [closing, setClosing] = useState(false);
+  // ＋ボタンから作った直後のメモ。一覧で「ぽんっ」と出す演出に使う
+  const [poppedId, setPoppedId] = useState<string | null>(null);
+  // ＋ボタンからの展開を再生中。この間はモバイルの右スライドを重ねない
+  const [expanding, setExpanding] = useState(false);
   const editorPaneRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -255,11 +259,68 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     }, 220); // CSS の flow-slide-out-right とほぼ同じ長さ
   }
 
-  async function handleCreate() {
+  // ＋ボタンからの新規作成。origin は押されたボタンの画面上の位置。
+  async function handleCreate(origin?: DOMRect) {
     const folderId = view.type === "folder" ? view.folderId : null;
     const tag = view.type === "tag" ? [view.tag] : undefined;
     const note = await createNote({ folder_id: folderId, type: "short", tags: tag });
-    if (note) setSelectedId(note.id);
+    if (!note) return;
+
+    // 一覧側：新しい行を上から「ぽんっ」と落として収める
+    const id = note.id;
+    setPoppedId(id);
+    window.setTimeout(
+      () => setPoppedId((cur) => (cur === id ? null : cur)),
+      600,
+    );
+
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const pane = editorPaneRef.current;
+    if (!origin || reduced || !pane || typeof pane.animate !== "function") {
+      setSelectedId(id);
+      return;
+    }
+
+    // 本文側：押した＋ボタンから育ったように見せる。
+    // ペイン全体をボタンの大きさまで潰すと文字が極端に歪むため、
+    // 変形の「原点」だけをボタンの中心に合わせ、拡大率は控えめにして
+    // 不透明度で繋ぐ。
+    setExpanding(true);
+    flushSync(() => setSelectedId(id));
+    const rect = pane.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      setExpanding(false);
+      return;
+    }
+    const ox = origin.left + origin.width / 2 - rect.left;
+    const oy = origin.top + origin.height / 2 - rect.top;
+    const origin2 = `${ox}px ${oy}px`;
+    const anim = pane.animate(
+      [
+        { transformOrigin: origin2, transform: "scale(0.2)", opacity: 0 },
+        { transformOrigin: origin2, opacity: 1, offset: 0.45 },
+        { transformOrigin: origin2, transform: "scale(1)", opacity: 1 },
+      ],
+      {
+        duration: 360,
+        easing: "cubic-bezier(0.22, 0.61, 0.36, 1)",
+        fill: "none",
+      },
+    );
+    const done = () => setExpanding(false);
+    anim.addEventListener("finish", done);
+    anim.addEventListener("cancel", done);
+  }
+
+  // 一覧から削除されたメモが開かれていたら、右側は未選択の状態に戻す
+  function handleNoteRemoved(id: string) {
+    if (id !== selectedId) return;
+    setSelectedId(null);
+    setFullscreen(false);
+    setClosing(false);
+    setBackX(null);
   }
 
   function openInWindow() {
@@ -348,6 +409,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           onQueryChange={setQuery}
           onSelect={setSelectedId}
           onCreate={handleCreate}
+          onNoteRemoved={handleNoteRemoved}
+          poppedId={poppedId}
           sidebarCollapsed={sidebarCollapsed}
           onOpenMenu={() => {
             setSidebarOpen(true); // モバイル：ドロワーを開く
@@ -376,7 +439,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
                   : "flow-drag-follow"
                 : closing
                   ? "flow-slide-out-right"
-                  : "flow-slide-in-right"
+                  : expanding
+                    ? "" // ＋からの展開中は右スライドを重ねない
+                    : "flow-slide-in-right"
             }`}
           >
             <NoteEditor
