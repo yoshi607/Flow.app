@@ -69,6 +69,8 @@ export default function NoteEditor({
   } = useNotes();
   const [recording, setRecording] = useState(false);
   const [drawing, setDrawing] = useState(false);
+  // 押された手書きボタンの位置（そこからキャンバスが広がるように見せる）
+  const [drawOrigin, setDrawOrigin] = useState<DOMRect | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
@@ -375,8 +377,11 @@ export default function NoteEditor({
             {/* 手書き（①）：iPad のみ表示。Apple Pencil での描画を想定 */}
             {isIPad && (
               <button
-                onClick={() => setDrawing(true)}
-                className="rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+                onClick={(e) => {
+                  setDrawOrigin(e.currentTarget.getBoundingClientRect());
+                  setDrawing(true);
+                }}
+                className="flow-press rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
                 title="手書き"
               >
                 <IconPencil />
@@ -652,6 +657,7 @@ export default function NoteEditor({
 
       {drawing && (
         <HandwritingCanvas
+          origin={drawOrigin}
           onSave={handleDrawingSave}
           onClose={() => setDrawing(false)}
         />
