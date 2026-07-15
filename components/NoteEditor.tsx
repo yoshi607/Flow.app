@@ -187,7 +187,7 @@ export default function NoteEditor({
       >
         <button
           onClick={onBack}
-          className={`rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
+          className={`rounded-lg p-2 text-neutral-500 transition-transform duration-150 hover:bg-brand-100 active:-translate-x-1 active:scale-90 dark:hover:bg-neutral-800 ${
             standalone ? "" : "md:hidden"
           }`}
           title={standalone ? "閉じる" : "戻る"}
@@ -245,8 +245,10 @@ export default function NoteEditor({
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className={`rounded-lg p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
-                  menuOpen ? "bg-brand-100 text-brand-700 dark:bg-neutral-800" : "text-neutral-500"
+                className={`rounded-lg p-2 transition-transform duration-150 hover:bg-brand-100 active:scale-90 dark:hover:bg-neutral-800 ${
+                  menuOpen
+                    ? "scale-95 bg-brand-100 text-brand-700 dark:bg-neutral-800"
+                    : "text-neutral-500"
                 }`}
                 title="その他"
                 aria-haspopup="menu"
@@ -263,7 +265,7 @@ export default function NoteEditor({
                   />
                   <div
                     role="menu"
-                    className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-brand-200/60 bg-white py-1 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
+                    className="flow-menu-in absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-brand-200/60 bg-white py-1 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
                   >
                     <button
                       role="menuitem"
@@ -312,7 +314,7 @@ export default function NoteEditor({
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
                     >
                       <IconMove className="h-4 w-4 text-neutral-500" />
-                      メモのフォルダ移動
+                      フォルダを変更
                     </button>
                     <div className="my-1 border-t border-brand-200/60 dark:border-neutral-800" />
                     <button

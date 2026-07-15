@@ -72,39 +72,76 @@ export default function HandwritingCanvas({
     return true;
   }
 
+  // 現在のペン設定を ctx に反映し、線幅を返す
+  function applyStyle(ctx: CanvasRenderingContext2D, pressure: number) {
+    if (erasing) {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.strokeStyle = "rgba(0,0,0,1)";
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      ctx.lineWidth = width * 4;
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      // 筆圧があれば太さに反映（0.5〜1.5倍）
+      ctx.lineWidth = width * (0.5 + pressure);
+    }
+    return ctx.lineWidth;
+  }
+
+  function pressureOf(e: { pressure: number }) {
+    return e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     if (!shouldDraw(e)) return;
     e.preventDefault();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     drawing.current = true;
-    last.current = pointFromEvent(e);
+    const p = pointFromEvent(e);
+    last.current = p;
+
+    // 押した瞬間に点を打つ。これが無いと、素早く短く書いた筆
+    // （pointermove がほとんど発生しない）が描画されず「反応しない」
+    // ように見えてしまう。
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const w = applyStyle(ctx, pressureOf(e));
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, w / 2, 0, Math.PI * 2);
+    ctx.fill();
+    dirty.current = true;
   }
 
   function onPointerMove(e: React.PointerEvent) {
     if (!drawing.current || !shouldDraw(e)) return;
     e.preventDefault();
     const ctx = canvasRef.current?.getContext("2d");
-    const p = pointFromEvent(e);
-    if (!ctx || !last.current) {
-      last.current = p;
+    if (!ctx) return;
+    if (!last.current) {
+      last.current = pointFromEvent(e);
       return;
     }
-    // 筆圧があれば太さに反映（0.5〜1.5倍）
-    const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
-    ctx.lineWidth = width * (0.5 + pressure);
-    if (erasing) {
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.strokeStyle = "rgba(0,0,0,1)";
-      ctx.lineWidth = width * 4;
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = color;
+
+    // 速く書くと pointermove が間引かれるため、ブラウザが保持している
+    // 中間点(coalesced events)も含めて全て描き、線の取りこぼしを防ぐ
+    const native = e.nativeEvent;
+    const points =
+      typeof native.getCoalescedEvents === "function"
+        ? native.getCoalescedEvents()
+        : [native];
+
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    for (const pe of points.length > 0 ? points : [native]) {
+      const p = { x: pe.clientX - rect.left, y: pe.clientY - rect.top };
+      applyStyle(ctx, pressureOf(pe));
+      ctx.beginPath();
+      ctx.moveTo(last.current!.x, last.current!.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      last.current = p;
     }
-    ctx.beginPath();
-    ctx.moveTo(last.current.x, last.current.y);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    last.current = p;
     dirty.current = true;
   }
 

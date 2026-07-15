@@ -173,6 +173,13 @@ export const IconMove = ({ className = base }: P) => (
   </svg>
 );
 
+export const IconCollapse = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 4v16" />
+    <path d="M20 12H9M13 8l-4 4 4 4" />
+  </svg>
+);
+
 export const IconClock = ({ className = base }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="9" />

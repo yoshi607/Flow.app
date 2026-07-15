@@ -16,6 +16,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // md 以上でフォルダ一覧（サイドバー）を最小化しているか
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -95,11 +97,15 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   return (
     <div className="h-app-screen flex overflow-hidden bg-brand-50 dark:bg-neutral-950">
-      {/* サイドバー（モバイルはドロワー / 全画面時は非表示） */}
+      {/* サイドバー（モバイルはドロワー / md以上は最小化可能 / 全画面時は非表示） */}
       <div
-        className={`fixed inset-y-0 left-0 z-30 w-64 transform transition-transform md:static md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-30 w-64 transform transition-transform duration-300 ease-out md:static md:translate-x-0 md:transition-[width,opacity] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } ${fullscreen ? "md:hidden" : ""}`}
+        } ${fullscreen ? "md:hidden" : ""} ${
+          sidebarCollapsed
+            ? "md:w-0 md:overflow-hidden md:opacity-0"
+            : "md:w-64 md:opacity-100"
+        }`}
       >
         <Sidebar
           view={view}
@@ -108,6 +114,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             setSettingsOpen(true);
             setSidebarOpen(false);
           }}
+          onCollapse={() => setSidebarCollapsed(true)}
         />
       </div>
       {sidebarOpen && (
@@ -117,9 +124,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         />
       )}
 
-      {/* メモ一覧（全画面時は非表示） */}
+      {/* メモ一覧（全画面時は非表示）
+          ※iPad縦(768〜834px)でも本文が潰れないよう、一覧の幅は控えめにする */}
       <div
-        className={`w-full flex-col border-r border-brand-200/60 dark:border-neutral-800 md:flex md:w-80 lg:w-96 ${
+        className={`w-full shrink-0 flex-col border-r border-brand-200/60 dark:border-neutral-800 md:flex md:w-72 lg:w-80 ${
           selectedId ? "hidden md:flex" : "flex"
         } ${fullscreen ? "md:hidden" : ""}`}
       >
@@ -132,7 +140,11 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           onQueryChange={setQuery}
           onSelect={setSelectedId}
           onCreate={handleCreate}
-          onOpenMenu={() => setSidebarOpen(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onOpenMenu={() => {
+            setSidebarOpen(true); // モバイル：ドロワーを開く
+            setSidebarCollapsed(false); // md以上：最小化を解除
+          }}
         />
       </div>
 

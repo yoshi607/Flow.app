@@ -138,6 +138,22 @@ body {
   }
 }
 
+/* ===== ポップオーバー（3点メニュー・色選択）の出現アニメーション ===== */
+@keyframes flow-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.flow-menu-in {
+  animation: flow-menu-in 0.16s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transform-origin: top right;
+}
+
 /* ===== 左スワイプ操作（⑥） ===== */
 .flow-swipe-row {
   touch-action: pan-y;

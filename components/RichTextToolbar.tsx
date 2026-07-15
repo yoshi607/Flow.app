@@ -130,7 +130,7 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
         {colorOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setColorOpen(false)} />
-            <div className="absolute right-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
+            <div className="flow-menu-in absolute right-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
               {COLORS.map((c) => {
                 const active = editor.isActive("textStyle", { color: c.hex });
                 return (

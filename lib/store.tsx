@@ -152,7 +152,9 @@ export function NotesProvider({
       if (immediate) {
         flushSave(id);
       } else {
-        saveTimers.current[id] = setTimeout(() => flushSave(id), 700);
+        // 入力が落ち着いてから保存。短すぎると書き込みが増え、長すぎると
+        // 他端末への同期が遅く感じるためこの値にしている。
+        saveTimers.current[id] = setTimeout(() => flushSave(id), 350);
       }
     },
     [patchLocal, flushSave],

@@ -10,6 +10,7 @@ import {
   IconSettings,
   IconTag,
   IconClock,
+  IconCollapse,
 } from "./icons";
 
 export type View =
@@ -23,10 +24,12 @@ export default function Sidebar({
   view,
   onChangeView,
   onOpenSettings,
+  onCollapse,
 }: {
   view: View;
   onChangeView: (v: View) => void;
   onOpenSettings: () => void;
+  onCollapse?: () => void;
 }) {
   const { notes, createFolder } = useNotes();
   const [adding, setAdding] = useState(false);
@@ -66,8 +69,19 @@ export default function Sidebar({
 
   return (
     <div className="flex h-full flex-col bg-brand-50/80 backdrop-blur-xl dark:bg-neutral-900 safe-top border-r border-brand-200/60 dark:border-neutral-800">
-      <div className="px-4 py-4">
-        <h1 className="text-xl font-semibold tracking-tight">Flow</h1>
+      <div className="flex items-center gap-1 px-4 py-4">
+        <h1 className="flex-1 text-xl font-semibold tracking-tight">Flow</h1>
+        {/* フォルダ一覧を最小化（md以上のみ。モバイルはドロワーなので不要） */}
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            title="フォルダ一覧を最小化"
+            aria-label="フォルダ一覧を最小化"
+            className="hidden rounded-lg p-1.5 text-neutral-400 transition hover:bg-brand-100 hover:text-neutral-700 active:scale-90 md:block dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            <IconCollapse className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 thin-scroll">

@@ -27,22 +27,25 @@ export default function FolderPickerSheet({
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="safe-bottom relative z-10 max-h-[70vh] w-full overflow-y-auto rounded-t-2xl bg-white p-2 shadow-xl dark:bg-neutral-900 sm:max-w-sm sm:rounded-2xl">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-sm font-semibold">フォルダを移動</span>
+        <div className="flex items-center gap-1 px-3 py-2">
+          <span className="flex-1 text-sm font-semibold">フォルダを変更</span>
+          {/* 新しいフォルダを作成（アイコンのみ） */}
+          <button
+            onClick={handleCreate}
+            title="新しいフォルダを作成"
+            aria-label="新しいフォルダを作成"
+            className="rounded-lg p-1.5 text-brand-700 transition hover:bg-brand-100 active:scale-90 dark:text-brand-200 dark:hover:bg-neutral-800"
+          >
+            <IconPlus className="h-5 w-5" />
+          </button>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-brand-100 dark:hover:bg-neutral-800"
+            aria-label="閉じる"
+            className="rounded-lg p-1.5 text-neutral-400 transition hover:bg-brand-100 active:scale-90 dark:hover:bg-neutral-800"
           >
-            <IconClose className="h-4 w-4" />
+            <IconClose className="h-5 w-5" />
           </button>
         </div>
-        <button
-          onClick={handleCreate}
-          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-brand-700 transition hover:bg-brand-100/70 dark:text-brand-200 dark:hover:bg-neutral-800/60"
-        >
-          <IconPlus className="h-4 w-4" />
-          新しいフォルダを作成
-        </button>
         <button
           onClick={() => onPick(null)}
           className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition ${

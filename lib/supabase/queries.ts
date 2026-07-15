@@ -4,7 +4,7 @@ import type { Note, Folder } from "@/lib/types";
 // ページ初回描画時にメモ/フォルダをサーバー側で先読みするための共通クエリ
 // （クライアント側フェッチの待ち時間を無くすために使用）
 export async function fetchInitialNotesData(supabase: SupabaseClient) {
-  const [{ data: notes }, { data: folders }] = await Promise.all([
+  const [notesRes, foldersRes] = await Promise.all([
     supabase
       .from("notes")
       .select("*")
@@ -13,8 +13,16 @@ export async function fetchInitialNotesData(supabase: SupabaseClient) {
     supabase.from("folders").select("*").order("sort_order").order("created_at"),
   ]);
 
+  // エラーを握りつぶすと「取得失敗」が「メモ0件」と区別できなくなるため必ず記録する
+  if (notesRes.error) {
+    console.error("メモの取得に失敗:", notesRes.error.message);
+  }
+  if (foldersRes.error) {
+    console.error("フォルダの取得に失敗:", foldersRes.error.message);
+  }
+
   return {
-    notes: (notes as Note[]) ?? [],
-    folders: (folders as Folder[]) ?? [],
+    notes: (notesRes.data as Note[]) ?? [],
+    folders: (foldersRes.data as Folder[]) ?? [],
   };
 }

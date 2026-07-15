@@ -98,6 +98,7 @@ export default function NoteList({
   onSelect,
   onCreate,
   onOpenMenu,
+  sidebarCollapsed = false,
 }: {
   notes: Note[];
   loading: boolean;
@@ -108,6 +109,7 @@ export default function NoteList({
   onSelect: (id: string) => void;
   onCreate: () => void;
   onOpenMenu: () => void;
+  sidebarCollapsed?: boolean;
 }) {
   const {
     folders,
@@ -184,9 +186,13 @@ export default function NoteList({
     <div className="flex h-full flex-col bg-white/70 backdrop-blur-xl dark:bg-neutral-950">
       {/* ヘッダー */}
       <div className="safe-top flex items-center gap-2 px-3 pt-3">
+        {/* モバイル：ドロワーを開く / md以上：最小化中のみ表示してフォルダを再表示 */}
         <button
           onClick={onOpenMenu}
-          className="rounded-lg p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 md:hidden"
+          title="フォルダを表示"
+          className={`rounded-lg p-2 transition hover:bg-brand-100 active:scale-90 dark:hover:bg-neutral-800 ${
+            sidebarCollapsed ? "" : "md:hidden"
+          }`}
         >
           <IconMenu />
         </button>
