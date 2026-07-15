@@ -30,6 +30,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [expanding, setExpanding] = useState(false);
   // 削除アニメーション再生中のメモ
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // 全画面から抜けた直後。メモ一覧を左から滑り込ませる
+  const [listSlidingIn, setListSlidingIn] = useState(false);
   const editorPaneRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -330,6 +332,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       return;
 
     const wasSelected = id === selectedId;
+    const wasFullscreen = wasSelected && fullscreen;
     // 消したあとに開く「最新のメモ」＝ 消すメモを除いた一覧の先頭。
     // 残りが無ければ未選択に戻す。
     const nextId = wasSelected
@@ -340,12 +343,22 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       if (permanent) deleteNotePermanently(id);
       else trashNote(id);
       setDeletingId((cur) => (cur === id ? null : cur));
-      if (wasSelected) {
-        setSelectedId((cur) => (cur === id ? nextId : cur));
-        setClosing(false);
-        setBackX(null);
+      if (!wasSelected) return;
+
+      setSelectedId((cur) => (cur === id ? nextId : cur));
+      setClosing(false);
+      setBackX(null);
+
+      // 全画面で消した場合は全画面を抜け、メモ一覧を左から滑り込ませる。
+      // フォルダ一覧は最小化のままにする。
+      if (wasFullscreen) {
+        setFullscreen(false);
+        setSidebarCollapsed(true);
+        setListSlidingIn(true);
+        window.setTimeout(() => setListSlidingIn(false), 340);
+      } else if (!nextId) {
         // 表示するメモが無くなったら全画面のままだと何も見えなくなる
-        if (!nextId) setFullscreen(false);
+        setFullscreen(false);
       }
     };
 
@@ -435,7 +448,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       <div
         className={`w-full shrink-0 flex-col border-r border-brand-200/60 dark:border-neutral-800 md:flex md:w-72 lg:w-80 ${
           selectedId ? "hidden md:flex" : "flex"
-        } ${fullscreen ? "md:hidden" : ""}`}
+        } ${fullscreen ? "md:hidden" : ""} ${
+          listSlidingIn ? "flow-slide-in-left" : ""
+        }`}
       >
         <NoteList
           notes={visibleNotes}
@@ -451,7 +466,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           deletingId={deletingId}
           sidebarCollapsed={sidebarCollapsed}
           onOpenMenu={() => {
-            setSidebarOpen(true); // モバイル：ドロワーを開く
+            // モバイルのみドロワーを開く。md以上で立てると、暗幕（閉じる手段）が
+            // md:hidden のため開きっぱなしの状態が残ってしまう
+            if (isMobile()) setSidebarOpen(true);
             setSidebarCollapsed(false); // md以上：最小化を解除
           }}
         />

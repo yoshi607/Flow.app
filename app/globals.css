@@ -250,6 +250,20 @@ body {
   animation: flow-slide-out-right 260ms var(--ease-out) forwards;
 }
 
+/* 全画面表示のままメモを消したときに、メモ一覧が左から入ってくる。
+   ※ flow-slide-in-right と違い md以上でも再生する（全画面は幅を問わないため） */
+@keyframes flow-slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.flow-slide-in-left {
+  animation: flow-slide-in-left 320ms var(--ease-out);
+}
+
 /* 指で戻している最中は、指の位置に完全同期させる（アニメーションを止める） */
 .flow-drag-follow {
   animation: none !important;
@@ -287,19 +301,26 @@ body {
     transition: none;
   }
 }
-/* サイドバーが出ている間、メイン側を奥へ引っ込める */
-.flow-main-pushed {
-  transition:
-    transform 320ms var(--ease-spring),
-    filter 320ms var(--ease-out);
-  transform: scale(0.96);
-  filter: brightness(0.82);
-  transform-origin: right center;
-}
-.flow-main-idle {
-  transition:
-    transform 260ms var(--ease-out),
-    filter 260ms var(--ease-out);
+/* サイドバーが出ている間、メイン側を奥へ引っ込める。
+   ※ md未満（ドロワー表示）限定。md以上ではサイドバーは常設で、
+      奥へ引っ込める相手がいない。ここを画面幅で区切らないと、
+      「フォルダ一覧を表示」した時の sidebarOpen=true が md以上でも
+      効いてしまい、閉じる手段（暗幕タップ）が md:hidden で存在しない
+      ため、一覧と本文が縮小・暗転したまま戻らなくなる。 */
+@media (max-width: 767px) {
+  .flow-main-pushed {
+    transition:
+      transform 320ms var(--ease-spring),
+      filter 320ms var(--ease-out);
+    transform: scale(0.96);
+    filter: brightness(0.82);
+    transform-origin: right center;
+  }
+  .flow-main-idle {
+    transition:
+      transform 260ms var(--ease-out),
+      filter 260ms var(--ease-out);
+  }
 }
 
 /* ===== ポップオーバー（3点メニュー・色選択）の出現アニメーション ===== */
