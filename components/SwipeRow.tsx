@@ -72,7 +72,11 @@ export default function SwipeRow({
       el.removeEventListener("wheel", onWheel);
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
     };
-  }, [openWidth]);
+    // isTouch/disabled を依存に入れるのは必須。初回描画は端末判定前で
+    // isTouch=false のため ref の付かない div が描画され、この effect は
+    // rowRef.current=null で何もせず終わる。判定後に描画が切り替わった
+    // タイミングで再実行しないと、wheel リスナーが永久に付かない。
+  }, [openWidth, isTouch, disabled]);
 
   if (!isTouch || disabled || actions.length === 0) {
     return <div className={className}>{children}</div>;
