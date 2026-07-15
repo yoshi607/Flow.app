@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { type Note, type Attachment } from "@/lib/types";
 import { shortNoteRemainingDays, trashRemainingDays, formatFileSize, shareNote } from "@/lib/utils";
 import { toEditorHtml, toAppendedParagraphs } from "@/lib/richtext";
+import { TranscriptCallout } from "@/lib/tiptap/transcriptCallout";
 import { listAttachments, uploadAttachment, deleteAttachment } from "@/lib/attachments";
 import RichTextToolbar from "./RichTextToolbar";
 import FolderPickerSheet from "./FolderPickerSheet";
@@ -72,6 +73,8 @@ export default function NoteEditor({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 録音中に書き込む対象のコールアウトを特定するID
+  const sessionRef = useRef<string | null>(null);
 
   const trashed = note.status === "trashed";
   const tags = note.tags ?? [];
@@ -151,6 +154,7 @@ export default function NoteEditor({
         listItem: false,
         listKeymap: false,
       }),
+      TranscriptCallout,
       TextStyle,
       Color,
       Placeholder.configure({
@@ -169,13 +173,116 @@ export default function NoteEditor({
     },
   });
 
-  function handleVoiceResult(result: { title: string; text: string }) {
-    setRecording(false);
+  // 録音開始：文字起こし用のコールアウトを本文末尾に置き、そこへ書き込んでいく
+  function startRecording() {
     if (!editor) return;
-    editor.chain().focus("end").insertContent(toAppendedParagraphs(result.text)).run();
+    const id =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : String(Date.now());
+    sessionRef.current = id;
+    editor
+      .chain()
+      .focus("end")
+      .insertContent({
+        type: "transcriptCallout",
+        attrs: { sessionId: id, recording: true },
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: "聞き取り中…" }] },
+        ],
+      })
+      .run();
+    setRecording(true);
+  }
+
+  // sessionId が一致するコールアウトの中身を差し替える。
+  // 位置はその都度探す（ユーザーが他所を編集して位置がずれても追従するため）
+  function writeCallout(html: string, stillRecording: boolean) {
+    const id = sessionRef.current;
+    if (!editor || !id) return;
+
+    let from: number | null = null;
+    let to: number | null = null;
+    editor.state.doc.descendants((node, pos) => {
+      if (from !== null) return false;
+      if (node.type.name === "transcriptCallout" && node.attrs.sessionId === id) {
+        from = pos;
+        to = pos + node.nodeSize;
+        return false;
+      }
+      return true;
+    });
+    if (from === null || to === null) return;
+
+    editor
+      .chain()
+      // 中身（開始/終了タグの内側）だけを差し替える。カーソルは動かさない
+      .insertContentAt({ from: from + 1, to: to - 1 }, html, {
+        updateSelection: false,
+      })
+      .command(({ tr }) => {
+        // 上の差し替えで位置が変わるため、改めて探して属性を更新する
+        let pos: number | null = null;
+        tr.doc.descendants((node, p) => {
+          if (pos !== null) return false;
+          if (
+            node.type.name === "transcriptCallout" &&
+            node.attrs.sessionId === id
+          ) {
+            pos = p;
+            return false;
+          }
+          return true;
+        });
+        if (pos === null) return true;
+        const node = tr.doc.nodeAt(pos);
+        if (node) {
+          tr.setNodeMarkup(pos, undefined, {
+            ...node.attrs,
+            recording: stillRecording,
+          });
+        }
+        return true;
+      })
+      .run();
+  }
+
+  // 録音中：ここまでの文字起こしを随時反映（保存はデバウンスに任せる）
+  function handlePartial(text: string) {
+    writeCallout(toAppendedParagraphs(text), true);
+  }
+
+  // 停止後：整形済みのテキストを確定させる
+  function handleFinal(result: { title: string; text: string }) {
+    setRecording(false);
+    writeCallout(toAppendedParagraphs(result.text), false);
+    sessionRef.current = null;
+    if (!editor) return;
     const patch: Partial<Note> = { body: editor.getHTML() };
     if (!note.title.trim() && result.title) patch.title = result.title;
     updateNote(note.id, patch, true);
+  }
+
+  // 取り消し／無音だった場合：空のコールアウトを残さず削除する
+  function handleVoiceCancel() {
+    setRecording(false);
+    const id = sessionRef.current;
+    sessionRef.current = null;
+    if (!editor || !id) return;
+    let from: number | null = null;
+    let to: number | null = null;
+    editor.state.doc.descendants((node, pos) => {
+      if (from !== null) return false;
+      if (node.type.name === "transcriptCallout" && node.attrs.sessionId === id) {
+        from = pos;
+        to = pos + node.nodeSize;
+        return false;
+      }
+      return true;
+    });
+    if (from === null || to === null) return;
+    editor.chain().deleteRange({ from, to }).run();
+    updateNote(note.id, { body: editor.getHTML() }, true);
   }
 
   function addTag(raw: string) {
@@ -236,8 +343,9 @@ export default function NoteEditor({
               onChange={handleFilesSelected}
             />
             <button
-              onClick={() => setRecording(true)}
-              className="rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+              onClick={startRecording}
+              disabled={recording}
+              className="rounded-lg p-2 text-neutral-500 transition hover:bg-brand-100 active:scale-90 disabled:opacity-40 dark:hover:bg-neutral-800"
               title="音声メモ"
             >
               <IconMic />
@@ -520,8 +628,9 @@ export default function NoteEditor({
 
       {recording && (
         <VoiceRecorder
-          onResult={handleVoiceResult}
-          onClose={() => setRecording(false)}
+          onPartial={handlePartial}
+          onFinal={handleFinal}
+          onCancel={handleVoiceCancel}
         />
       )}
 

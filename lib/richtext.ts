@@ -1,10 +1,13 @@
 // Tiptap 本文（HTML文字列）を扱うための小さなヘルパー群
 
-// エディタ（Tiptap）が保存する本文は必ず <p>/<h1>/<h2>/<h3> から始まる。
+// エディタ（Tiptap）が保存する本文は必ず <p>/<h1>/<h2>/<h3>、または
+// 音声メモのコールアウト <div data-type="transcript"> から始まる。
 // それ以外は「移行前のプレーンテキスト」とみなす（本文中に "<a>タグ" のような
-// 文字列が含まれるだけで誤判定しないよう、先頭一致のみで判定する）
+// 文字列が含まれるだけで誤判定しないよう、先頭一致のみで判定する）。
+// ※ コールアウトを許可し忘れると、コールアウトで始まるメモが
+//   プレーンテキスト扱いになり、本文HTMLが丸ごとエスケープされて壊れる。
 export function isPlainText(body: string): boolean {
-  return !/^\s*<(p|h1|h2|h3)[ >]/i.test(body);
+  return !/^\s*(<(p|h1|h2|h3)[ >]|<div\s+data-type="transcript")/i.test(body);
 }
 
 export function escapeHtml(text: string): string {
