@@ -20,6 +20,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  // 戻るアニメーション再生中（モバイル）
+  const [closing, setClosing] = useState(false);
 
   // 現在のビュー＋検索でフィルタしたメモ一覧
   const visibleNotes = useMemo(() => {
@@ -74,9 +76,22 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setFullscreen(false);
   }
 
+  // 一覧へ戻る。モバイルでは右へスライドさせてから閉じる（③の逆再生）
   function closeEditor() {
-    setSelectedId(null);
-    setFullscreen(false);
+    const isDesktop =
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 768px)").matches;
+    if (isDesktop) {
+      setSelectedId(null);
+      setFullscreen(false);
+      return;
+    }
+    setClosing(true);
+    window.setTimeout(() => {
+      setSelectedId(null);
+      setFullscreen(false);
+      setClosing(false);
+    }, 220); // CSS の flow-slide-out-right とほぼ同じ長さ
   }
 
   async function handleCreate() {
@@ -153,10 +168,13 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         className={`flex-1 flex-col ${selectedId ? "flex" : "hidden md:flex"}`}
       >
         {selectedNote ? (
-          // key で開くたびに再マウントし、モバイルでは右スライドを再生（③）
+          // key で開くたびに再マウントし、モバイルでは右スライドを再生（③）。
+          // 戻るときは逆に右へスライドアウトさせる。
           <div
             key={selectedNote.id}
-            className="flow-slide-in-right flex h-full flex-col"
+            className={`flex h-full flex-col ${
+              closing ? "flow-slide-out-right" : "flow-slide-in-right"
+            }`}
           >
             <NoteEditor
               note={selectedNote}

@@ -63,10 +63,20 @@ Supabase はデータベース・認証・ファイル保存をまとめて提�
 
 ### 3. リアルタイム同期を有効化
 
-複数端末で即時同期するための設定です。
+複数端末で即時同期するための設定です。**この設定が無いと他端末の変更が
+反映されません**（画面を開き直すまで古いままになります）。
 
-1. 左メニュー **「Database」→「Replication」**（または Table Editor の各テーブル設定）へ。
-2. `notes` と `folders` テーブルの **Realtime を ON** にする。
+**SQL で設定する（推奨・確実）**
+
+1. 左メニュー **「SQL Editor」** を開く。
+2. [`supabase/migrations/0003_realtime.sql`](supabase/migrations/0003_realtime.sql)
+   の中身をすべて貼り付けて **「Run」**。
+   - `notes` / `folders` が Realtime の配信対象に追加されます。
+   - 何度実行しても安全です（冪等）。
+
+> 画面から行う場合は「Database」→「Replication」で `notes` と `folders` の
+> Realtime を ON にします。ただし削除の同期には `REPLICA IDENTITY FULL` が
+> 必要なため、上記 SQL の実行を推奨します。
 
 ### 4. ストレージ（画像・添付用／将来の拡張向け）
 

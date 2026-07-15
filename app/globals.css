@@ -131,9 +131,25 @@ body {
 .flow-slide-in-right {
   animation: flow-slide-in-right 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
+
+/* 一覧へ戻るときは右へスライドして閉じる */
+@keyframes flow-slide-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.flow-slide-out-right {
+  animation: flow-slide-out-right 0.24s cubic-bezier(0.55, 0.06, 0.68, 0.19)
+    forwards;
+}
+
 /* PC/タブレット横向き（3ペイン表示）ではスライドしない */
 @media (min-width: 768px) {
-  .flow-slide-in-right {
+  .flow-slide-in-right,
+  .flow-slide-out-right {
     animation: none;
   }
 }
