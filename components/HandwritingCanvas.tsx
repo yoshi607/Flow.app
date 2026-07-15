@@ -29,6 +29,8 @@ export default function HandwritingCanvas({
   const dirty = useRef(false);
   // 現在描画中のポインタID（他の指の混入を無視するため）
   const activeId = useRef<number | null>(null);
+  // 今の筆が始まった時刻（遅れて届いた古い筆の pointerup を捨てるため）
+  const strokeStart = useRef(0);
 
   const [color, setColor] = useState(PEN_COLORS[0]);
   const [width, setWidth] = useState(PEN_WIDTHS[1]);
@@ -37,10 +39,14 @@ export default function HandwritingCanvas({
   // Apple Pencil を持っていない場合はトグルで指描きに切り替え可能。
   const [penOnly, setPenOnly] = useState(true);
 
+  // 【一時的】不具合調査用のイベントログ表示。原因が確定したら削除する。
+  const [debug, setDebug] = useState(false);
+  const [events, setEvents] = useState<string[]>([]);
+
   // 描画設定は ref にも持つ。描画はネイティブのイベントリスナーで行うため、
   // 再購読せずに常に最新の設定を読めるようにするのが目的。
-  const settings = useRef({ color, width, erasing, penOnly });
-  settings.current = { color, width, erasing, penOnly };
+  const settings = useRef({ color, width, erasing, penOnly, debug });
+  settings.current = { color, width, erasing, penOnly, debug };
 
   // キャンバスの初期化と描画イベントの購読（マウント時に1回だけ）。
   //
@@ -63,6 +69,12 @@ export default function HandwritingCanvas({
     ctx.scale(dpr, dpr);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+
+    // 【一時的】デバッグ表示が ON のときだけイベントを記録する
+    const log = (msg: string) => {
+      if (!settings.current.debug) return;
+      setEvents((prev) => [msg, ...prev].slice(0, 14));
+    };
 
     const pointOf = (e: { clientX: number; clientY: number }) => {
       const r = canvas.getBoundingClientRect();
@@ -110,8 +122,10 @@ export default function HandwritingCanvas({
       // 前の筆が pointerup を取りこぼしていても、必ず新しい筆として開始する
       drawing.current = true;
       activeId.current = e.pointerId;
+      strokeStart.current = e.timeStamp;
       const p = pointOf(e);
       last.current = p;
+      log(`down id=${e.pointerId} ${e.pointerType}`);
 
       // 押した瞬間に点を打つ（速く短い筆は move がほぼ発生しないため）
       const w = applyStyle(pressureOf(e));
@@ -149,23 +163,43 @@ export default function HandwritingCanvas({
     };
 
     const onUp = (e: PointerEvent) => {
-      if (activeId.current !== null && e.pointerId !== activeId.current) return;
+      if (!drawing.current) return;
+      // 今描いている筆の pointerup 以外は無視（手のひら等の指を弾く）。
+      // ※ activeId が null のときに素通りしないよう、厳密に比較する。
+      if (activeId.current !== e.pointerId) return;
+      // 【重要】iOS は pointerId を使い回すことがあり、1画目の pointerup が
+      // 2画目の pointerdown より遅れて届くと、この筆を誤って終了させてしまう
+      // （＝2画目が描けない）。筆の開始より前に発生した up は捨てる。
+      if (e.timeStamp < strokeStart.current) {
+        log(`up(stale) id=${e.pointerId} 無視`);
+        return;
+      }
       drawing.current = false;
       activeId.current = null;
       last.current = null;
+      log(`up id=${e.pointerId} ${e.pointerType}`);
+    };
+
+    // pointercancel は「遅れて届いた古いup」判定を適用せず、確実に筆を終える
+    const onCancel = (e: PointerEvent) => {
+      if (activeId.current !== e.pointerId) return;
+      drawing.current = false;
+      activeId.current = null;
+      last.current = null;
+      log(`cancel id=${e.pointerId} ${e.pointerType}`);
     };
 
     canvas.addEventListener("pointerdown", onDown, { passive: false });
     // move/up は window で受ける（指が要素外へ出ても筆が途切れないように）
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointercancel", onCancel);
 
     return () => {
       canvas.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointercancel", onCancel);
     };
   }, []);
 
@@ -281,6 +315,21 @@ export default function HandwritingCanvas({
         </button>
 
         <div className="flex-1" />
+        {/* 【一時的】不具合調査用。原因が確定したら削除する */}
+        <button
+          onClick={() => {
+            setEvents([]);
+            setDebug((v) => !v);
+          }}
+          title="デバッグ表示"
+          className={`rounded-lg px-2 py-1.5 text-sm transition ${
+            debug
+              ? "bg-brand-200 text-brand-700 dark:bg-neutral-700 dark:text-neutral-100"
+              : "text-neutral-400 hover:bg-brand-100 dark:hover:bg-neutral-800"
+          }`}
+        >
+          🐞
+        </button>
         <button
           onClick={save}
           className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
@@ -297,6 +346,16 @@ export default function HandwritingCanvas({
           className="absolute inset-0 h-full w-full"
           style={{ touchAction: "none" }}
         />
+        {/* 【一時的】受け取ったポインタイベントの記録 */}
+        {debug && (
+          <div className="pointer-events-none absolute right-2 top-2 max-h-[60%] w-56 overflow-hidden rounded-lg bg-black/75 p-2 font-mono text-[10px] leading-tight text-green-300">
+            {events.length === 0 ? (
+              <div>ここに書くとイベントが出ます</div>
+            ) : (
+              events.map((line, i) => <div key={i}>{line}</div>)
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
