@@ -118,8 +118,21 @@ export default function HandwritingCanvas({
       return ctx.lineWidth;
     };
 
+    // キャンバス領域内か（要素ではなく座標で判定する。Safari がイベントを
+    // 別要素へリターゲットしても取りこぼさないようにするため）
+    const insideCanvas = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      return (
+        e.clientX >= r.left &&
+        e.clientX <= r.right &&
+        e.clientY >= r.top &&
+        e.clientY <= r.bottom
+      );
+    };
+
     const onDown = (e: PointerEvent) => {
       if (!shouldDraw(e)) return;
+      if (!insideCanvas(e)) return;
       e.preventDefault();
       // 前の筆が pointerup を取りこぼしていても、必ず新しい筆として開始する
       drawing.current = true;
@@ -221,14 +234,34 @@ export default function HandwritingCanvas({
       log(`cancel id=${e.pointerId} ${e.pointerType}`);
     };
 
-    canvas.addEventListener("pointerdown", onDown, { passive: false });
+    // 【重要】Safari は Apple Pencil に対して touch-action:none を効かせず、
+    // ジェスチャー認識（ダブルタップ等）が働いて2画目の pointerdown を
+    // 握りつぶすことがある。ペン/指のタッチ既定動作をここで明示的に止める。
+    const blockTouch = (e: TouchEvent) => e.preventDefault();
+
+    // 【一時的】フィルタ前の生の pointerdown を記録して、
+    // 「イベント自体が届いていないのか / 種別で弾いているのか」を確定させる
+    const rawDown = (e: PointerEvent) => log(`RAW down ${e.pointerType}`);
+    window.addEventListener("pointerdown", rawDown, true);
+
+    // pointerdown も window のキャプチャで受ける（要素へのリターゲットや
+    // 途中での stopPropagation に影響されないようにするため）
+    window.addEventListener("pointerdown", onDown, {
+      passive: false,
+      capture: true,
+    });
+    canvas.addEventListener("touchstart", blockTouch, { passive: false });
+    canvas.addEventListener("touchmove", blockTouch, { passive: false });
     // move/up は window で受ける（指が要素外へ出ても筆が途切れないように）
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
 
     return () => {
-      canvas.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointerdown", rawDown, true);
+      window.removeEventListener("pointerdown", onDown, true);
+      canvas.removeEventListener("touchstart", blockTouch);
+      canvas.removeEventListener("touchmove", blockTouch);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
