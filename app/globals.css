@@ -94,6 +94,16 @@ body {
   @apply border-red-300 bg-red-50 dark:border-red-500/40 dark:bg-red-500/10;
 }
 
+/* ===== 本文中の手書きブロック ===== */
+.ProseMirror div[data-type="sketch"] {
+  @apply my-3 overflow-hidden rounded-md border border-brand-200 bg-white dark:border-neutral-700 dark:bg-neutral-900;
+}
+/* 中身を持たないノードなので、プレースホルダーの疑似要素が漏れないようにする */
+.ProseMirror div[data-type="sketch"]::before,
+.ProseMirror div[data-type="sketch"]::after {
+  content: none;
+}
+
 .ProseMirror p.is-editor-empty:first-child::before,
 .ProseMirror .is-empty::before {
   content: attr(data-placeholder);

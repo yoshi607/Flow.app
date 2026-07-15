@@ -13,14 +13,13 @@ import { type Note, type Attachment } from "@/lib/types";
 import { shortNoteRemainingDays, trashRemainingDays, formatFileSize, shareNote } from "@/lib/utils";
 import { toEditorHtml, toAppendedParagraphs } from "@/lib/richtext";
 import { TranscriptCallout } from "@/lib/tiptap/transcriptCallout";
+import { Sketch } from "@/lib/tiptap/sketch";
 import { listAttachments, uploadAttachment, deleteAttachment } from "@/lib/attachments";
 import RichTextToolbar from "./RichTextToolbar";
 import FolderPickerSheet from "./FolderPickerSheet";
 
 // 録音ボタンを押した時だけ使うため遅延読み込みにし、メモを開く際の初期JSを減らす
 const VoiceRecorder = dynamic(() => import("./VoiceRecorder"), { ssr: false });
-// 手書きキャンバスも同様に遅延読み込み（iPad で開いた時だけ必要）
-const HandwritingCanvas = dynamic(() => import("./HandwritingCanvas"), { ssr: false });
 import {
   IconBack,
   IconPin,
@@ -68,9 +67,6 @@ export default function NoteEditor({
     deleteNotePermanently,
   } = useNotes();
   const [recording, setRecording] = useState(false);
-  const [drawing, setDrawing] = useState(false);
-  // 押された手書きボタンの位置（そこからキャンバスが広がるように見せる）
-  const [drawOrigin, setDrawOrigin] = useState<DOMRect | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
@@ -138,19 +134,6 @@ export default function NoteEditor({
     setUploading(false);
   }
 
-  // 手書きキャンバスで描いた内容を PNG 画像として添付に保存（①）
-  async function handleDrawingSave(blob: Blob) {
-    setDrawing(false);
-    const file = new File([blob], `手書き-${Date.now()}.png`, { type: "image/png" });
-    setUploading(true);
-    try {
-      const attachment = await uploadAttachment(supabase, userId, note.id, file);
-      setAttachments((prev) => [...prev, attachment]);
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "手書きの保存に失敗しました");
-    }
-    setUploading(false);
-  }
 
   async function handleDeleteAttachment(attachment: Attachment) {
     setAttachments((prev) => prev.filter((a) => a.id !== attachment.id));
@@ -179,6 +162,7 @@ export default function NoteEditor({
         listKeymap: false,
       }),
       TranscriptCallout,
+      Sketch,
       TextStyle,
       Color,
       Placeholder.configure({
@@ -196,6 +180,23 @@ export default function NoteEditor({
       updateNote(note.id, { body: editor.getHTML() });
     },
   });
+
+  // 手書き（①）：カーソル位置に手書きブロックを挿入する。
+  // 基準幅(w)は 0 のままにしておき、ブロック自身が最初に測れた幅を入れる
+  // （本文の内側パディングを引いた実際の描画幅と一致させるため）。
+  function insertSketch() {
+    if (!editor) return;
+    editor
+      .chain()
+      .focus()
+      // 後ろに空段落を足す。手書きブロックは中身を持たないため、末尾に置くと
+      // 続きを入力する場所が無くなってしまう（iPadでは特に困る）
+      .insertContent([
+        { type: "sketch", attrs: { strokes: "[]", h: 220, w: 0 } },
+        { type: "paragraph" },
+      ])
+      .run();
+  }
 
   // 録音開始：文字起こし用のコールアウトを本文末尾に置き、そこへ書き込んでいく
   function startRecording() {
@@ -377,10 +378,7 @@ export default function NoteEditor({
             {/* 手書き（①）：iPad のみ表示。Apple Pencil での描画を想定 */}
             {isIPad && (
               <button
-                onClick={(e) => {
-                  setDrawOrigin(e.currentTarget.getBoundingClientRect());
-                  setDrawing(true);
-                }}
+                onClick={insertSketch}
                 className="flow-press rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
                 title="手書き"
               >
@@ -655,13 +653,6 @@ export default function NoteEditor({
         />
       )}
 
-      {drawing && (
-        <HandwritingCanvas
-          origin={drawOrigin}
-          onSave={handleDrawingSave}
-          onClose={() => setDrawing(false)}
-        />
-      )}
     </div>
   );
 }
