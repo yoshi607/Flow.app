@@ -45,6 +45,7 @@ export default function NoteEditor({
   isFullscreen,
   onToggleFullscreen,
   onOpenWindow,
+  onRequestDelete,
   standalone = false,
 }: {
   note: Note;
@@ -52,6 +53,9 @@ export default function NoteEditor({
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   onOpenWindow?: () => void;
+  /** 削除を依頼する。確認・アニメーション・実際の削除は AppShell が担う。
+   *  未指定（別ウィンドウ表示）のときはこの場で削除して閉じる。 */
+  onRequestDelete?: (permanent?: boolean) => void;
   standalone?: boolean;
 }) {
   const {
@@ -69,6 +73,24 @@ export default function NoteEditor({
   const [menuOpen, setMenuOpen] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const { isIPad } = useDevice();
+
+  // 削除。一覧・本文それぞれの消えるアニメーションを揃えるため、
+  // 通常は親（AppShell）に委ねる。別ウィンドウ表示のときは親がいないので
+  // この場で削除して閉じる。
+  function requestDelete(permanent: boolean) {
+    if (onRequestDelete) {
+      onRequestDelete(permanent);
+      return;
+    }
+    if (
+      permanent &&
+      !window.confirm("このメモを完全に削除しますか？（元に戻せません）")
+    )
+      return;
+    if (permanent) deleteNotePermanently(note.id);
+    else trashNote(note.id);
+    onBack();
+  }
   const supabase = useMemo(() => createClient(), []);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -441,8 +463,7 @@ export default function NoteEditor({
                       role="menuitem"
                       onClick={() => {
                         setMenuOpen(false);
-                        trashNote(note.id);
-                        onBack();
+                        requestDelete(false);
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
                     >
@@ -489,12 +510,7 @@ export default function NoteEditor({
             <IconRestore className="h-4 w-4" /> 復元
           </button>
           <button
-            onClick={() => {
-              if (window.confirm("このメモを完全に削除しますか？（元に戻せません）")) {
-                deleteNotePermanently(note.id);
-                onBack();
-              }
-            }}
+            onClick={() => requestDelete(true)}
             className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
           >
             完全に削除

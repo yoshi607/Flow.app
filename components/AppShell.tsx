@@ -11,7 +11,8 @@ import NoteEditor from "./NoteEditor";
 import SettingsDialog from "./SettingsDialog";
 
 export default function AppShell({ userEmail }: { userEmail: string }) {
-  const { notes, folders, loading, createNote } = useNotes();
+  const { notes, folders, loading, createNote, trashNote, deleteNotePermanently } =
+    useNotes();
 
   const [view, setView] = useState<View>({ type: "all" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -27,6 +28,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [poppedId, setPoppedId] = useState<string | null>(null);
   // ＋ボタンからの展開を再生中。この間はモバイルの右スライドを重ねない
   const [expanding, setExpanding] = useState(false);
+  // 削除アニメーション再生中のメモ
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const editorPaneRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -314,13 +317,40 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     anim.addEventListener("cancel", done);
   }
 
-  // 一覧から削除されたメモが開かれていたら、右側は未選択の状態に戻す
-  function handleNoteRemoved(id: string) {
-    if (id !== selectedId) return;
-    setSelectedId(null);
-    setFullscreen(false);
-    setClosing(false);
-    setBackX(null);
+  // メモの削除。一覧の行は左へ滑り出て、開いている本文は中心へ縮んで消える。
+  // 一覧から消しても本文の3点メニューから消しても同じ動きになるよう、
+  // 削除の入口をここに一本化し、store の更新は再生が終わるまで待つ
+  // （先に消すと、消える様子を見せる相手がいなくなるため）。
+  function requestDelete(id: string, permanent = false) {
+    if (
+      permanent &&
+      !window.confirm("このメモを完全に削除しますか？（元に戻せません）")
+    )
+      return;
+
+    const wasSelected = id === selectedId;
+    const commit = () => {
+      if (permanent) deleteNotePermanently(id);
+      else trashNote(id);
+      setDeletingId((cur) => (cur === id ? null : cur));
+      if (wasSelected) {
+        // 右側は「何も選択していない」状態に戻す
+        setSelectedId((cur) => (cur === id ? null : cur));
+        setFullscreen(false);
+        setClosing(false);
+        setBackX(null);
+      }
+    };
+
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      commit();
+      return;
+    }
+    setDeletingId(id);
+    window.setTimeout(commit, 260); // CSS の削除アニメーションと同じ長さ
   }
 
   function openInWindow() {
@@ -409,8 +439,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           onQueryChange={setQuery}
           onSelect={setSelectedId}
           onCreate={handleCreate}
-          onNoteRemoved={handleNoteRemoved}
+          onRequestDelete={requestDelete}
           poppedId={poppedId}
+          deletingId={deletingId}
           sidebarCollapsed={sidebarCollapsed}
           onOpenMenu={() => {
             setSidebarOpen(true); // モバイル：ドロワーを開く
@@ -433,15 +464,17 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
               backX !== null ? { transform: `translateX(${backX}px)` } : undefined
             }
             className={`flex h-full flex-col ${
-              backX !== null
-                ? settling
-                  ? "flow-drag-settle"
-                  : "flow-drag-follow"
-                : closing
-                  ? "flow-slide-out-right"
-                  : expanding
-                    ? "" // ＋からの展開中は右スライドを重ねない
-                    : "flow-slide-in-right"
+              deletingId === selectedNote.id
+                ? "flow-note-collapse"
+                : backX !== null
+                  ? settling
+                    ? "flow-drag-settle"
+                    : "flow-drag-follow"
+                  : closing
+                    ? "flow-slide-out-right"
+                    : expanding
+                      ? "" // ＋からの展開中は右スライドを重ねない
+                      : "flow-slide-in-right"
             }`}
           >
             <NoteEditor
@@ -450,6 +483,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
               isFullscreen={fullscreen}
               onToggleFullscreen={toggleFullscreen}
               onOpenWindow={openInWindow}
+              onRequestDelete={(permanent) =>
+                requestDelete(selectedNote.id, permanent)
+              }
             />
           </div>
         ) : (

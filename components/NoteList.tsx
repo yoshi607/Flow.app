@@ -90,8 +90,9 @@ export default function NoteList({
   onSelect,
   onCreate,
   onOpenMenu,
-  onNoteRemoved,
+  onRequestDelete,
   poppedId = null,
+  deletingId = null,
   sidebarCollapsed = false,
 }: {
   notes: Note[];
@@ -103,20 +104,15 @@ export default function NoteList({
   onSelect: (id: string) => void;
   onCreate: (origin: DOMRect) => void;
   onOpenMenu: () => void;
-  /** 一覧から消えた（削除された）メモを知らせる */
-  onNoteRemoved: (id: string) => void;
+  /** 削除を依頼する（確認・アニメーション・実際の削除は AppShell が担う） */
+  onRequestDelete: (id: string, permanent?: boolean) => void;
   /** 作成直後のメモ。上から「ぽんっ」と出す演出に使う */
   poppedId?: string | null;
+  /** 削除アニメーション再生中のメモ。左へ滑り出て消える */
+  deletingId?: string | null;
   sidebarCollapsed?: boolean;
 }) {
-  const {
-    folders,
-    emptyTrash,
-    trashNote,
-    restoreNote,
-    deleteNotePermanently,
-    updateNote,
-  } = useNotes();
+  const { folders, emptyTrash, restoreNote, updateNote } = useNotes();
   // 「移動」対象のメモ（フォルダ選択シートを開く）
   const [movingNote, setMovingNote] = useState<Note | null>(null);
 
@@ -136,14 +132,8 @@ export default function NoteList({
           label: "完全削除",
           icon: <IconTrash />,
           className: "bg-red-600",
-          onClick: () => {
-            if (
-              window.confirm("このメモを完全に削除しますか？（元に戻せません）")
-            ) {
-              deleteNotePermanently(note.id);
-              onNoteRemoved(note.id);
-            }
-          },
+          keepOpen: true,
+          onClick: () => onRequestDelete(note.id, true),
         },
       ];
     }
@@ -167,10 +157,8 @@ export default function NoteList({
         label: "削除",
         icon: <IconTrash />,
         className: "bg-red-600",
-        onClick: () => {
-          trashNote(note.id);
-          onNoteRemoved(note.id);
-        },
+        keepOpen: true,
+        onClick: () => onRequestDelete(note.id),
       },
     ];
   }
@@ -252,7 +240,11 @@ export default function NoteList({
               key={note.id}
               actions={actionsFor(note)}
               className={`mb-1 rounded-2xl ${
-                poppedId === note.id ? "flow-note-pop" : ""
+                deletingId === note.id
+                  ? "flow-row-delete"
+                  : poppedId === note.id
+                    ? "flow-note-pop"
+                    : ""
               }`}
             >
             <button

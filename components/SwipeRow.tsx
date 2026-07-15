@@ -9,6 +9,9 @@ export interface SwipeAction {
   icon: ReactNode;
   /** ボタンの配色クラス（背景色など） */
   className: string;
+  /** 実行後も行を開いたままにする。削除のように、行そのものが
+   *  アニメーションで消える場合に使う（閉じ戻りと動きがぶつかるため） */
+  keepOpen?: boolean;
   onClick: () => void;
 }
 
@@ -145,7 +148,7 @@ export default function SwipeRow({
           <div key={a.key} style={{ width: ACTION_WIDTH }} className="flex p-1">
             <button
               onClick={() => {
-                close();
+                if (!a.keepOpen) close();
                 a.onClick();
               }}
               className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-medium text-white ${a.className}`}
