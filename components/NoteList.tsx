@@ -47,42 +47,32 @@ function Countdown({ note }: { note: Note }) {
   return null;
 }
 
-// ＋ボタン：タップで拡散アニメーション（②）を再生してから onCreate を呼ぶ
+// ＋ボタン：タップで外側へ広がるリングを一度だけ再生してから onCreate を呼ぶ。
+// 粒子を飛ばすような派手な演出はせず、control 一点から広がる感覚だけを残す。
 function CreateButton({ onCreate }: { onCreate: () => void }) {
-  const [bursts, setBursts] = useState<number[]>([]);
-  // 放射する粒子の角度（8方向）
-  const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+  const [rings, setRings] = useState<number[]>([]);
 
   function handleClick() {
     const id = Date.now();
-    setBursts((b) => [...b, id]);
+    setRings((r) => [...r, id]);
     // アニメーション終了後に要素を片付ける
-    window.setTimeout(() => setBursts((b) => b.filter((x) => x !== id)), 550);
+    window.setTimeout(() => setRings((r) => r.filter((x) => x !== id)), 500);
     onCreate();
   }
 
   return (
     <button
       onClick={handleClick}
-      className="relative rounded-full bg-brand-200 p-2 text-brand-700 shadow-sm transition hover:bg-brand-300 active:scale-95 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+      className="flow-press rounded-full bg-brand-200 p-2 text-brand-700 shadow-sm hover:bg-brand-300 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
       title="新規メモ"
     >
       <IconPlus />
-      {bursts.map((id) => (
+      {rings.map((id) => (
         <span
           key={id}
-          className="pointer-events-none absolute inset-0"
+          className="flow-burst-ring pointer-events-none absolute inset-0 rounded-full border border-brand-400 dark:border-brand-500"
           aria-hidden
-        >
-          <span className="flow-burst-ring absolute inset-0 rounded-full border-2 border-brand-400 dark:border-brand-500" />
-          {angles.map((a) => (
-            <span
-              key={a}
-              className="flow-burst-particle absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full bg-brand-500"
-              style={{ ["--a" as string]: `${a}deg` }}
-            />
-          ))}
-        </span>
+        />
       ))}
     </button>
   );
@@ -190,7 +180,7 @@ export default function NoteList({
         <button
           onClick={onOpenMenu}
           title="フォルダを表示"
-          className={`rounded-lg p-2 transition hover:bg-brand-100 active:scale-90 dark:hover:bg-neutral-800 ${
+          className={`flow-press rounded-lg p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
             sidebarCollapsed ? "" : "md:hidden"
           }`}
         >
@@ -250,7 +240,7 @@ export default function NoteList({
             >
             <button
               onClick={() => onSelect(note.id)}
-              className={`block w-full rounded-2xl px-3 py-2.5 text-left transition ${
+              className={`flow-press block w-full rounded-2xl px-3 py-2.5 text-left ${
                 selectedId === note.id
                   ? "bg-brand-100 dark:bg-brand-500/20"
                   : "hover:bg-brand-100/60 dark:hover:bg-neutral-800/60"

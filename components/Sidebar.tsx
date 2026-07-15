@@ -77,7 +77,7 @@ export default function Sidebar({
             onClick={onCollapse}
             title="フォルダ一覧を最小化"
             aria-label="フォルダ一覧を最小化"
-            className="hidden rounded-lg p-1.5 text-neutral-400 transition hover:bg-brand-100 hover:text-neutral-700 active:scale-90 md:block dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+            className="flow-press hidden rounded-lg p-1.5 text-neutral-400 hover:bg-brand-100 hover:text-neutral-700 md:block dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
             <IconCollapse className="h-5 w-5" />
           </button>

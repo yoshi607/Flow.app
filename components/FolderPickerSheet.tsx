@@ -34,14 +34,14 @@ export default function FolderPickerSheet({
             onClick={handleCreate}
             title="新しいフォルダを作成"
             aria-label="新しいフォルダを作成"
-            className="rounded-lg p-1.5 text-brand-700 transition hover:bg-brand-100 active:scale-90 dark:text-brand-200 dark:hover:bg-neutral-800"
+            className="flow-press rounded-lg p-1.5 text-brand-700 hover:bg-brand-100 dark:text-brand-200 dark:hover:bg-neutral-800"
           >
             <IconPlus className="h-5 w-5" />
           </button>
           <button
             onClick={onClose}
             aria-label="閉じる"
-            className="rounded-lg p-1.5 text-neutral-400 transition hover:bg-brand-100 active:scale-90 dark:hover:bg-neutral-800"
+            className="flow-press rounded-lg p-1.5 text-neutral-400 hover:bg-brand-100 dark:hover:bg-neutral-800"
           >
             <IconClose className="h-5 w-5" />
           </button>

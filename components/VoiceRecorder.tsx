@@ -227,14 +227,14 @@ export default function VoiceRecorder({
             </span>
             <button
               onClick={stop}
-              className="rounded-full bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition active:scale-95 dark:bg-white dark:text-neutral-900"
+              className="flow-press rounded-full bg-neutral-900 px-5 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
             >
               停止
             </button>
             <button
               onClick={cancel}
               title="取り消し"
-              className="rounded-lg p-2 text-neutral-400 transition hover:bg-brand-100 active:scale-90 dark:hover:bg-neutral-800"
+              className="flow-press rounded-lg p-2 text-neutral-400 hover:bg-brand-100 dark:hover:bg-neutral-800"
             >
               <IconClose className="h-4 w-4" />
             </button>

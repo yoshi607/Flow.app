@@ -306,7 +306,7 @@ export default function NoteEditor({
       >
         <button
           onClick={onBack}
-          className={`rounded-lg p-2 text-neutral-500 transition-transform duration-150 hover:bg-brand-100 active:-translate-x-1 active:scale-90 dark:hover:bg-neutral-800 ${
+          className={`flow-press rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
             standalone ? "" : "md:hidden"
           }`}
           title={standalone ? "閉じる" : "戻る"}
@@ -345,7 +345,7 @@ export default function NoteEditor({
             <button
               onClick={startRecording}
               disabled={recording}
-              className="rounded-lg p-2 text-neutral-500 transition hover:bg-brand-100 active:scale-90 disabled:opacity-40 dark:hover:bg-neutral-800"
+              className="flow-press rounded-lg p-2 text-neutral-500 hover:bg-brand-100 disabled:opacity-40 dark:hover:bg-neutral-800"
               title="音声メモ"
             >
               <IconMic />
@@ -365,9 +365,9 @@ export default function NoteEditor({
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className={`rounded-lg p-2 transition-transform duration-150 hover:bg-brand-100 active:scale-90 dark:hover:bg-neutral-800 ${
+                className={`flow-press rounded-lg p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
                   menuOpen
-                    ? "scale-95 bg-brand-100 text-brand-700 dark:bg-neutral-800"
+                    ? "bg-brand-100 text-brand-700 dark:bg-neutral-800"
                     : "text-neutral-500"
                 }`}
                 title="その他"

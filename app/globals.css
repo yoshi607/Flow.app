@@ -103,36 +103,72 @@ body {
   @apply text-neutral-300 dark:text-neutral-600;
 }
 
-/* ===== ＋ボタンの拡散アニメーション（②） =====
-   タップ時に外側へ広がるリングと粒子を一度だけ再生する。 */
-@keyframes flow-burst-ring {
-  0% {
-    transform: scale(0.3);
-    opacity: 0.55;
-  }
-  100% {
-    transform: scale(2.4);
-    opacity: 0;
+/* ============================================================
+   アニメーション設計方針（Appleメモアプリ的インタラクション）
+   ------------------------------------------------------------
+   1. 入力への応答は「即時」、状態変化の完了は「緩やか」という
+      非対称性を全体で一貫させる。
+   2. スケール・移動・不透明度の変化は小さく、物理法則に沿わせる。
+      派手な演出は避ける。
+   3. ジェスチャー操作は指の動きに追従させ、固定タイミングの
+      アニメーションに任せきりにしない。
+   4. イージングは ease-out か軽いスプリング。等速直線は使わない。
+   ============================================================ */
+:root {
+  /* 減速して着地する標準のイージング */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* わずかにオーバーシュートするスプリング（機械的さを消す） */
+  --ease-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+/* ===== 1. タップフィードバック =====
+   押した瞬間は遅延ゼロで背景がわずかに暗くなり、離すと約180msかけて
+   フェードで戻る（非対称）。スケールは変えない。
+   ::after を重ねることで、選択中の行など既存の背景色を壊さずに暗くする。 */
+.flow-press {
+  position: relative;
+}
+.flow-press::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: rgb(0 0 0 / 0.07);
+  opacity: 0;
+  pointer-events: none;
+  /* 解放時：ゆっくりフェードで戻す */
+  transition: opacity 180ms ease-out;
+}
+.flow-press:active::after {
+  opacity: 1;
+  /* 押下時：待たせない */
+  transition-duration: 0s;
+}
+@media (prefers-color-scheme: dark) {
+  .flow-press::after {
+    background-color: rgb(255 255 255 / 0.1);
   }
 }
-@keyframes flow-burst-particle {
+
+/* ===== 2. ＋ボタン =====
+   一度だけ外側へ広がるリング。粒子を飛ばす派手な演出はしない。 */
+@keyframes flow-burst-ring {
   0% {
-    transform: translate(-50%, -50%) rotate(var(--a)) translateX(0) scale(1);
-    opacity: 0.9;
+    transform: scale(0.6);
+    opacity: 0.4;
   }
   100% {
-    transform: translate(-50%, -50%) rotate(var(--a)) translateX(22px) scale(0.2);
+    transform: scale(1.9);
     opacity: 0;
   }
 }
 .flow-burst-ring {
-  animation: flow-burst-ring 0.5s ease-out forwards;
-}
-.flow-burst-particle {
-  animation: flow-burst-particle 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  animation: flow-burst-ring 0.45s var(--ease-out) forwards;
 }
 
-/* ===== メモを開く右スライド（③・モバイル） ===== */
+/* ===== 3. メモを開く／戻る（モバイル） =====
+   開く: 右からスライドイン。動き始めは速く、終わりで減速する。
+   戻る: 逆再生。ただし体感で約20%短くして「軽さ」を出す。 */
 @keyframes flow-slide-in-right {
   from {
     transform: translateX(100%);
@@ -142,10 +178,9 @@ body {
   }
 }
 .flow-slide-in-right {
-  animation: flow-slide-in-right 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: flow-slide-in-right 320ms var(--ease-out);
 }
 
-/* 一覧へ戻るときは右へスライドして閉じる */
 @keyframes flow-slide-out-right {
   from {
     transform: translateX(0);
@@ -155,8 +190,18 @@ body {
   }
 }
 .flow-slide-out-right {
-  animation: flow-slide-out-right 0.24s cubic-bezier(0.55, 0.06, 0.68, 0.19)
-    forwards;
+  animation: flow-slide-out-right 260ms var(--ease-out) forwards;
+}
+
+/* 指で戻している最中は、指の位置に完全同期させる（アニメーションを止める） */
+.flow-drag-follow {
+  animation: none !important;
+  transition: none;
+}
+/* 指を離して確定/復帰させるときだけ滑らかに動かす */
+.flow-drag-settle {
+  animation: none !important;
+  transition: transform 260ms var(--ease-out);
 }
 
 /* PC/タブレット横向き（3ペイン表示）ではスライドしない */
@@ -167,11 +212,44 @@ body {
   }
 }
 
+/* ===== 4. サイドバー =====
+   出現: 左からスライドしつつ、メインコンテンツは奥へ縮小・暗転させる。
+        軽いスプリングで機械的にならないようにする（250〜350ms）。
+   非表示: 逆再生。ただし約20%短くして「軽さ」を出す。 */
+/* md未満（ドロワー表示）でのみ transform を動かす。
+   md以上は幅/不透明度のアニメーション（最小化）なので干渉させない。 */
+@media (max-width: 767px) {
+  .flow-sidebar-enter {
+    transition: transform 320ms var(--ease-spring);
+  }
+  .flow-sidebar-leave {
+    transition: transform 260ms var(--ease-out);
+  }
+  /* ドラッグ中は指に完全同期させる */
+  .flow-sidebar-drag {
+    transition: none;
+  }
+}
+/* サイドバーが出ている間、メイン側を奥へ引っ込める */
+.flow-main-pushed {
+  transition:
+    transform 320ms var(--ease-spring),
+    filter 320ms var(--ease-out);
+  transform: scale(0.96);
+  filter: brightness(0.82);
+  transform-origin: right center;
+}
+.flow-main-idle {
+  transition:
+    transform 260ms var(--ease-out),
+    filter 260ms var(--ease-out);
+}
+
 /* ===== ポップオーバー（3点メニュー・色選択）の出現アニメーション ===== */
 @keyframes flow-menu-in {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(-6px);
+    transform: scale(0.94) translateY(-4px);
   }
   to {
     opacity: 1;
@@ -179,16 +257,16 @@ body {
   }
 }
 .flow-menu-in {
-  animation: flow-menu-in 0.16s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: flow-menu-in 160ms var(--ease-out);
   transform-origin: top right;
 }
 
-/* ===== 左スワイプ操作（⑥） ===== */
+/* ===== 左スワイプ操作 ===== */
 .flow-swipe-row {
   touch-action: pan-y;
 }
 .flow-swipe-content {
-  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: transform 280ms var(--ease-out);
   will-change: transform;
 }
 .flow-swipe-content.dragging {
