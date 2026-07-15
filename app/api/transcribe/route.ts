@@ -11,7 +11,10 @@ export async function POST(request: Request) {
   // Cookie の食い違いで 401 になることがあるため、ページと同じ方式に統一）。
   const userId = headers().get("x-user-id");
   if (!userId) {
-    return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+    return NextResponse.json(
+      { error: "アプリの認証エラー：ログインし直してください" },
+      { status: 401 },
+    );
   }
 
   const apiKey = process.env.GROQ_API_KEY;
@@ -48,8 +51,27 @@ export async function POST(request: Request) {
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
+    // Groq がキーを拒否した場合。アプリ側の認証エラー(401)と紛らわしいので
+    // 「どちらの 401 か」がひと目で分かる文言にする。
+    if (res.status === 401 || res.status === 403) {
+      return NextResponse.json(
+        {
+          error:
+            "Groqに拒否されました：GROQ_API_KEY が無効か期限切れです。" +
+            "Vercelの環境変数を確認し、再デプロイしてください。",
+          detail,
+        },
+        { status: 502 },
+      );
+    }
+    if (res.status === 429) {
+      return NextResponse.json(
+        { error: "Groqの利用上限に達しました。しばらく待って再試行してください。", detail },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
-      { error: `文字起こしに失敗しました (${res.status})`, detail },
+      { error: `文字起こしに失敗しました (Groq: ${res.status})`, detail },
       { status: 502 },
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useDevice } from "@/lib/useDevice";
 
 export interface SwipeAction {
@@ -33,8 +33,46 @@ export default function SwipeRow({
   const [dragging, setDragging] = useState(false);
   const start = useRef({ x: 0, y: 0, base: 0 });
   const axis = useRef<"none" | "x" | "y">("none");
+  const rowRef = useRef<HTMLDivElement>(null);
+  const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 最新の offset をリスナーから読むための控え
+  const offsetRef = useRef(0);
+  offsetRef.current = offset;
 
   const openWidth = actions.length * ACTION_WIDTH;
+
+  // トラックパッド（iPadのキーボード接続時など）の2本指・横スクロールでも
+  // アクションを開けるようにする。指のスワイプは touch イベント側で処理。
+  // ※ preventDefault が必要なため、passive:false のネイティブリスナーで登録する。
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // 横方向の意図があるときだけ反応（縦スクロールは邪魔しない）
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+
+      let next = offsetRef.current - e.deltaX;
+      if (next > 0) next = 0;
+      if (next < -openWidth) next = -openWidth;
+      setDragging(true); // 追従中はアニメーションを切る
+      setOffset(next);
+
+      // スクロールが止まったら開/閉にスナップする
+      if (wheelTimer.current) clearTimeout(wheelTimer.current);
+      wheelTimer.current = setTimeout(() => {
+        setDragging(false);
+        setOffset(offsetRef.current < -openWidth / 2 ? -openWidth : 0);
+      }, 140);
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      if (wheelTimer.current) clearTimeout(wheelTimer.current);
+    };
+  }, [openWidth]);
 
   if (!isTouch || disabled || actions.length === 0) {
     return <div className={className}>{children}</div>;
@@ -74,7 +112,10 @@ export default function SwipeRow({
   const close = () => setOffset(0);
 
   return (
-    <div className={`flow-swipe-row relative overflow-hidden ${className}`}>
+    <div
+      ref={rowRef}
+      className={`flow-swipe-row relative overflow-hidden ${className}`}
+    >
       {/* 背後のアクション（丸みのある四角ボタン） */}
       <div className="absolute inset-y-0 right-0 flex">
         {actions.map((a) => (

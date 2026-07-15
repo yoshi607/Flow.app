@@ -123,7 +123,7 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
         >
           {/* 現在色の丸（未設定時はグレー枠） */}
           <span
-            className="h-5 w-5 rounded-full border border-black/10 dark:border-white/20"
+            className="h-5 w-5 rounded-full border-2 border-black/30 dark:border-white/40"
             style={{ backgroundColor: currentColor ?? "transparent" }}
           />
         </button>
