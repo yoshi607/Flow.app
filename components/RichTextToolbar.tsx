@@ -10,6 +10,8 @@ import {
   IconHeading2,
   IconHeading3,
   IconParagraph,
+  IconUndo,
+  IconRedo,
 } from "./icons";
 
 const COLORS: { name: string; hex: string }[] = [
@@ -43,8 +45,37 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
     else editor.chain().focus().toggleHeading({ level }).run();
   };
 
+  const canUndo = editor.can().undo();
+  const canRedo = editor.can().redo();
+
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* 1つ戻す / 1つ送る */}
+      <div className="flex items-center gap-0.5">
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => editor.chain().focus().undo().run()}
+          disabled={!canUndo}
+          title="1つ戻す (Ctrl/Cmd+Z)"
+          aria-label="1つ戻す"
+          className="rounded-lg p-1.5 text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30 dark:hover:bg-neutral-800"
+        >
+          <IconUndo className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => editor.chain().focus().redo().run()}
+          disabled={!canRedo}
+          title="1つ送る (Ctrl/Cmd+Shift+Z)"
+          aria-label="1つ送る"
+          className="rounded-lg p-1.5 text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30 dark:hover:bg-neutral-800"
+        >
+          <IconRedo className="h-4 w-4" />
+        </button>
+      </div>
+
       {/* 見出し / テキスト */}
       <div className="flex items-center gap-0.5 rounded-lg bg-brand-100 p-0.5 dark:bg-neutral-800">
         {HEADINGS.map(({ level, icon: Icon, title }) => (
