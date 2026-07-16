@@ -17,7 +17,9 @@ export const ImageBlock = Node.create({
   name: "imageBlock",
   group: "block",
   atom: true,
-  selectable: true,
+  // タップは拡大表示のために使う。ノード選択（青い枠）は出したくないので
+  // 選択不可にする。削除は NodeView の削除ボタンから行う。
+  selectable: false,
   draggable: false,
 
   addAttributes() {
@@ -50,6 +52,8 @@ export const ImageBlock = Node.create({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(ImageBlockView);
+    // タップは NodeView 側（拡大・削除）で処理する。ProseMirror には
+    // イベントを扱わせない＝選択もされない。
+    return ReactNodeViewRenderer(ImageBlockView, { stopEvent: () => true });
   },
 });

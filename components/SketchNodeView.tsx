@@ -402,7 +402,22 @@ export default function SketchNodeView({
       )}
 
       {editable && drawing && (
-        <div className="flex flex-wrap items-center gap-2 px-2 py-1.5">
+        <div
+          className="flex flex-wrap items-center gap-2 px-2 py-1.5"
+          // 【重要】ツールバーのボタンにフォーカスを移させない。
+          // ボタンにフォーカスが残ると iPadOS のスクリブルの標的になり、
+          // 続けてキャンバスに書いた手書きが文字認識されてしまう。
+          // フォーカスを奪わなければ、その後の手書きも正しく描画になる。
+          // また、これによりペンでもボタンを押せる（スクリブルに横取り
+          // されなくなる）。onMouseDown は container で一括して止められる
+          // （フォーカスは default action なので bubbling 中の preventDefault で防げる）。
+          onMouseDown={(e) => e.preventDefault()}
+          // ペンがマウス互換イベントを出さない場合の保険：タップ後に念のため外す
+          onClick={() => {
+            const a = document.activeElement as HTMLElement | null;
+            if (a && a.tagName === "BUTTON") a.blur();
+          }}
+        >
           {/* 色（1つのボタンにまとめ、タップで色選択） */}
           <div className="relative">
             <button

@@ -117,6 +117,11 @@ body {
 .ProseMirror div[data-type="image"]::after {
   content: none;
 }
+/* 画像・手書きはタップで選択（青い枠）させない */
+.ProseMirror div[data-type="image"].ProseMirror-selectednode,
+.ProseMirror div[data-type="sketch"].ProseMirror-selectednode {
+  outline: none;
+}
 
 .ProseMirror p.is-editor-empty:first-child::before,
 .ProseMirror .is-empty::before {
