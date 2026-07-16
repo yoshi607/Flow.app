@@ -8,9 +8,9 @@ import {
   IconTrash,
   IconPlus,
   IconSettings,
-  IconTag,
   IconClock,
   IconCollapse,
+  IconChevron,
 } from "./icons";
 
 export type View =
@@ -34,6 +34,7 @@ export default function Sidebar({
   const { notes, createFolder } = useNotes();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [tagsOpen, setTagsOpen] = useState(true);
 
   const activeCount = notes.filter((n) => n.status === "active").length;
   const shortCount = notes.filter(
@@ -65,6 +66,14 @@ export default function Sidebar({
       active
         ? "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200"
         : "hover:bg-brand-100/70 dark:hover:bg-neutral-800/60"
+    }`;
+
+  // タグのチップ（ピル）表示
+  const chipClass = (active: boolean) =>
+    `rounded-2xl px-3.5 py-2 text-sm font-medium transition ${
+      active
+        ? "bg-brand-200 text-brand-700 dark:bg-brand-500/25 dark:text-brand-100"
+        : "bg-brand-100 text-neutral-600 hover:bg-brand-200/70 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
     }`;
 
   return (
@@ -154,30 +163,47 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* タグ一覧 */}
+        {/* タグ一覧（折り返すチップ表示）。見出しのチェブロンで開閉できる */}
         <div className="pt-3">
-          <div className="px-3 pb-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+          <button
+            onClick={() => setTagsOpen((v) => !v)}
+            className="flex w-full items-center justify-between px-3 pb-1 text-neutral-400 transition hover:text-neutral-600 dark:hover:text-neutral-200"
+          >
+            <span className="text-xs font-medium uppercase tracking-wide">
               タグ
             </span>
-          </div>
-          {tags.length === 0 ? (
-            <p className="px-3 py-1 text-xs text-neutral-400">
-              メモにタグを付けると、ここに表示されます
-            </p>
-          ) : (
-            tags.map(([tag, count]) => (
-              <button
-                key={tag}
-                className={rowClass(view.type === "tag" && view.tag === tag)}
-                onClick={() => onChangeView({ type: "tag", tag })}
-              >
-                <IconTag className="h-4 w-4" />
-                <span className="flex-1 truncate">{tag}</span>
-                <span className="text-xs text-neutral-400">{count}</span>
-              </button>
-            ))
-          )}
+            <IconChevron
+              className={`h-4 w-4 transition-transform ${
+                tagsOpen ? "" : "-rotate-90"
+              }`}
+            />
+          </button>
+
+          {tagsOpen &&
+            (tags.length === 0 ? (
+              <p className="px-3 py-1 text-xs text-neutral-400">
+                メモにタグを付けると、ここに表示されます
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2 px-2 pt-1">
+                {/* すべてのタグ＝タグの絞り込みを解除（すべてのメモへ） */}
+                <button
+                  onClick={() => onChangeView({ type: "all" })}
+                  className={chipClass(view.type === "all")}
+                >
+                  すべてのタグ
+                </button>
+                {tags.map(([tag]) => (
+                  <button
+                    key={tag}
+                    onClick={() => onChangeView({ type: "tag", tag })}
+                    className={chipClass(view.type === "tag" && view.tag === tag)}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            ))}
         </div>
       </nav>
 
