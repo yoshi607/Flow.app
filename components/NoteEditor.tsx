@@ -449,8 +449,9 @@ export default function NoteEditor({
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-neutral-950">
-      {/* ヘッダー（書式パネルを浮かせるため relative） */}
-      <div className="safe-top relative flex items-center gap-1 border-b border-brand-200/60 px-2 py-2 dark:border-neutral-800">
+      {/* ヘッダー（書式パネルを浮かせるため relative／狭い幅では折り返して
+          3点ボタンが見切れないように flex-wrap） */}
+      <div className="safe-top relative flex flex-wrap items-center gap-1 border-b border-brand-200/60 px-2 py-2 dark:border-neutral-800">
         <button
           onClick={onBack}
           className={`flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
@@ -480,6 +481,13 @@ export default function NoteEditor({
           >
             <IconShare />
           </button>
+        )}
+        {/* 短期メモのバッジ。共有ボタンの右に全角空白1つ分あけて表示。
+            3分割（md）では出さず、全画面・モバイルでのみ表示する。 */}
+        {!trashed && badgeVisible && (
+          <span className="flow-badge-in ml-[1em] rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+            短期・あと{shortDays}日
+          </span>
         )}
 
         <div className="flex-1" />
@@ -560,9 +568,10 @@ export default function NoteEditor({
                     className="fixed inset-0 z-40"
                     onClick={() => setMenuOpen(false)}
                   />
+                  {/* アニメーションと背景色は Aa パネルと揃える */}
                   <div
                     role="menu"
-                    className="flow-menu-in absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-brand-200/60 bg-white py-1 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
+                    className="flow-format-in absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800"
                   >
                     <button
                       role="menuitem"
@@ -682,15 +691,6 @@ export default function NoteEditor({
           >
             完全に削除
           </button>
-        </div>
-      ) : badgeVisible ? (
-        // 短期メモのバッジ行。3分割（md）では出さず、全画面・モバイルでのみ表示。
-        // ※ 書式ツール（Aa）はヘッダー下に浮かせているのでこの行には無い＝
-        //   Aa を押しても本文やタグは動かない。
-        <div className="flex items-center border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
-          <span className="flow-badge-in rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
-            短期・あと{shortDays}日
-          </span>
         </div>
       ) : null}
 

@@ -137,12 +137,16 @@ export default function SwipeRow({
 
   const close = () => setOffset(0);
 
+  // スワイプの開き具合（0〜1）。これに応じてアクションを小→大に見せる。
+  const revealRatio = openWidth > 0 ? Math.min(1, Math.abs(offset) / openWidth) : 0;
+  const actionScale = 0.5 + 0.5 * revealRatio;
+
   return (
     <div
       ref={rowRef}
       className={`flow-swipe-row relative overflow-hidden ${className}`}
     >
-      {/* 背後のアクション（丸みのある四角ボタン） */}
+      {/* 背後のアクション（丸みのある四角ボタン）。スワイプ量に応じて拡大する */}
       <div className="absolute inset-y-0 right-0 flex">
         {actions.map((a) => (
           <div key={a.key} style={{ width: ACTION_WIDTH }} className="flex p-1">
@@ -150,6 +154,11 @@ export default function SwipeRow({
               onClick={() => {
                 if (!a.keepOpen) close();
                 a.onClick();
+              }}
+              style={{
+                transform: `scale(${actionScale})`,
+                opacity: 0.3 + 0.7 * revealRatio,
+                transition: dragging ? "none" : "transform 150ms, opacity 150ms",
               }}
               className={`flow-press flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-medium text-white ${a.className}`}
             >
