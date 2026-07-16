@@ -72,10 +72,14 @@ export function NotesProvider({
   // 一度でも購読に成功したか（初回とその後の再接続を区別するため）
   const subscribedOnce = useRef(false);
 
-  // このメモはローカルを優先すべきか（保存中 or 直近3秒に自分が編集した）
+  // このメモはローカルを優先すべきか
+  // （保存中 or 未保存の差分が残っている or 直近3秒に自分が編集した）。
+  // pendingPatches を見ないと、オフライン中などに保存できなかった編集が
+  // 3秒経過後の refresh でサーバーの古い内容に巻き戻されてしまう。
   const keepLocal = useCallback(
     (id: string) =>
       savingIds.current.has(id) ||
+      pendingPatches.current[id] !== undefined ||
       Date.now() - (lastEditedAt.current[id] ?? 0) < 3000,
     [],
   );
@@ -138,9 +142,9 @@ export function NotesProvider({
             return;
           }
           const row = payload.new as Note;
-          // 自分が編集中・保存直後のノートはローカルを優先し上書きしない
-          if (savingIds.current.has(row.id)) return;
-          if (Date.now() - (lastEditedAt.current[row.id] ?? 0) < 3000) return;
+          // 自分が編集中・保存直後・未保存の差分が残っているノートは
+          // ローカルを優先し上書きしない
+          if (keepLocal(row.id)) return;
           setNotes((prev) => {
             const idx = prev.findIndex((x) => x.id === row.id);
             if (idx === -1) return [row, ...prev];
@@ -181,7 +185,7 @@ export function NotesProvider({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, userId, refresh]);
+  }, [supabase, userId, refresh, keepLocal]);
 
   // ローカル状態を1件更新
   const patchLocal = useCallback((id: string, patch: Partial<Note>) => {
@@ -200,12 +204,54 @@ export function NotesProvider({
       delete pendingPatches.current[id];
       if (!patch || Object.keys(patch).length === 0) return;
       savingIds.current.add(id);
-      const { error } = await supabase.from("notes").update(patch).eq("id", id);
+      let error: { message: string } | null = null;
+      try {
+        ({ error } = await supabase.from("notes").update(patch).eq("id", id));
+      } catch (e) {
+        // オフライン等で fetch 自体が失敗した場合
+        error = { message: e instanceof Error ? e.message : "通信エラー" };
+      }
       savingIds.current.delete(id);
-      if (error) console.error("保存に失敗:", error.message);
+      if (error) {
+        console.error("保存に失敗:", error.message);
+        // 失敗した差分は捨てずに再キューし、次の編集・オンライン復帰・
+        // アプリ非表示時の flush で再送する。保存待ちの間により新しい編集が
+        // 入っていた場合はそちらを優先してマージする。
+        pendingPatches.current[id] = { ...patch, ...pendingPatches.current[id] };
+      }
     },
     [supabase],
   );
+
+  // 保存待ちの差分を全て即時保存する。
+  // 350ms のデバウンス待ちの間にアプリを閉じたり切り替えたりすると
+  // （特に iOS はバックグラウンドでタイマーが止まる）最後の入力が
+  // 保存されないため、画面が隠れる瞬間に flush する。
+  const flushAll = useCallback(() => {
+    for (const id of Object.keys(pendingPatches.current)) {
+      if (saveTimers.current[id]) {
+        clearTimeout(saveTimers.current[id]);
+        delete saveTimers.current[id];
+      }
+      void flushSave(id);
+    }
+  }, [flushSave]);
+
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") flushAll();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    // タブを閉じる/リロードする直前の最後の望み（ベストエフォート）
+    window.addEventListener("pagehide", flushAll);
+    // オフラインで失敗して再キューされた差分を、復帰したら再送する
+    window.addEventListener("online", flushAll);
+    return () => {
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pagehide", flushAll);
+      window.removeEventListener("online", flushAll);
+    };
+  }, [flushAll]);
 
   const updateNote = useCallback(
     (id: string, patch: Partial<Note>, immediate = false) => {
