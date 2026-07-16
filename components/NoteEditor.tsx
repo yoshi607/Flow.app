@@ -449,12 +449,8 @@ export default function NoteEditor({
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-neutral-950">
-      {/* ヘッダー */}
-      <div
-        className={`safe-top flex items-center gap-1 border-b border-brand-200/60 px-2 py-2 dark:border-neutral-800 ${
-          standalone ? "" : ""
-        }`}
-      >
+      {/* ヘッダー（書式パネルを浮かせるため relative） */}
+      <div className="safe-top relative flex items-center gap-1 border-b border-brand-200/60 px-2 py-2 dark:border-neutral-800">
         <button
           onClick={onBack}
           className={`flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
@@ -635,6 +631,18 @@ export default function NoteEditor({
             </div>
           </>
         )}
+
+        {/* 書式（Aa）パネル。本文やタグを押し下げないよう、ヘッダーの下に
+            浮かせて表示する（幅は内容ぶんだけ・右寄せ）。Aa の位置から広がる。 */}
+        {formatOpen && (
+          <div
+            className={`${
+              formatClosing ? "flow-format-out" : "flow-format-in"
+            } absolute right-2 top-full z-30 mt-1 max-w-[calc(100%-1rem)] rounded-2xl border border-brand-200/60 bg-brand-50 px-2 py-1.5 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
+          >
+            <RichTextToolbar editor={editor} />
+          </div>
+        )}
       </div>
 
       {folderPickerOpen && (
@@ -675,26 +683,14 @@ export default function NoteEditor({
             完全に削除
           </button>
         </div>
-      ) : formatOpen || badgeVisible ? (
-        // 書式ツールバー行。「Aa」を押したときだけ書式ツールを出す。
-        <div className="flex flex-wrap items-center gap-3 border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
-          {/* 短期メモのバッジ。3分割（md）では出さず、全画面・モバイルでのみ表示 */}
-          {badgeVisible && (
-            <span className="flow-badge-in rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
-              短期・あと{shortDays}日
-            </span>
-          )}
-          <div className="flex-1" />
-          {formatOpen && (
-            // Aa を押したことが分かるよう、書式ツールを丸みのある背景でまとめる
-            <div
-              className={`${
-                formatClosing ? "flow-format-out" : "flow-format-in"
-              } rounded-2xl bg-brand-100/70 px-2 py-1 dark:bg-neutral-800/70`}
-            >
-              <RichTextToolbar editor={editor} />
-            </div>
-          )}
+      ) : badgeVisible ? (
+        // 短期メモのバッジ行。3分割（md）では出さず、全画面・モバイルでのみ表示。
+        // ※ 書式ツール（Aa）はヘッダー下に浮かせているのでこの行には無い＝
+        //   Aa を押しても本文やタグは動かない。
+        <div className="flex items-center border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
+          <span className="flow-badge-in rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+            短期・あと{shortDays}日
+          </span>
         </div>
       ) : null}
 
