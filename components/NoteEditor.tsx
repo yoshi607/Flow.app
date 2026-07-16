@@ -166,7 +166,7 @@ export default function NoteEditor({
     editorProps: {
       attributes: {
         class:
-          "thin-scroll flex-1 overflow-y-auto px-4 py-3 leading-relaxed outline-none",
+          "thin-scroll flex-1 overflow-y-auto break-words px-4 py-3 leading-relaxed outline-none",
       },
       // 画像の貼り付け（PC）。画像が含まれていたら取り込む
       handlePaste: (_view, event) => {

@@ -474,10 +474,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         />
       </div>
 
-      {/* エディタ（全画面ボタンでは、このペインが育って画面になるよう変形させる） */}
+      {/* エディタ（全画面ボタンでは、このペインが育って画面になるよう変形させる）
+          min-w-0：画像や手書きなど幅を持つ要素が入っても、ペインが利用可能幅を
+          超えて広がらないようにする（iPad縦の3分割で右側が見切れるのを防ぐ） */}
       <div
         ref={editorPaneRef}
-        className={`flex-1 flex-col ${selectedId ? "flex" : "hidden md:flex"}`}
+        className={`min-w-0 flex-1 flex-col ${selectedId ? "flex" : "hidden md:flex"}`}
       >
         {selectedNote ? (
           // key で開くたびに再マウントし、モバイルでは右スライドを再生。
