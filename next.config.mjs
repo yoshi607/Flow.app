@@ -33,6 +33,13 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // バージョン表示用。デプロイのたびに必ず変わる値をビルド時に埋め込む。
+  // コミットSHA(Vercelが自動提供)＋ビルド日時。設定画面で確認できる。
+  env: {
+    NEXT_PUBLIC_APP_COMMIT:
+      process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+    NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+  },
   // 本番ビルドは型チェックを維持しつつ、ESLintツールの都合でビルドが
   // 止まらないようにする（開発時は `npm run lint` で確認可能）。
   eslint: {

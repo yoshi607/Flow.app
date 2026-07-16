@@ -15,6 +15,20 @@ export default function SettingsDialog({
   const router = useRouter();
   const supabase = createClient();
 
+  // バージョン情報（デプロイのたびに変わる。反映されているかの確認用）
+  const commit = process.env.NEXT_PUBLIC_APP_COMMIT ?? "local";
+  const buildTimeRaw = process.env.NEXT_PUBLIC_BUILD_TIME;
+  const buildTime = buildTimeRaw
+    ? new Intl.DateTimeFormat("ja-JP", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Tokyo",
+      }).format(new Date(buildTimeRaw))
+    : "不明";
+
   async function signOut() {
     await supabase.auth.signOut();
     router.push("/login");
@@ -63,6 +77,14 @@ export default function SettingsDialog({
           >
             ログアウト
           </button>
+
+          {/* バージョン（反映されているかの確認用） */}
+          <div className="flex items-center justify-between pt-1 text-xs text-neutral-400">
+            <span>バージョン</span>
+            <span className="font-mono">
+              {commit} ・ {buildTime}
+            </span>
+          </div>
         </div>
       </div>
     </div>
