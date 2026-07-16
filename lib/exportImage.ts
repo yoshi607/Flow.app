@@ -13,6 +13,8 @@
 
 import { type Node as PMNode } from "@tiptap/pm/model";
 import { deserialize, replay, type Stroke } from "@/lib/sketch/strokes";
+import { createClient } from "@/lib/supabase/client";
+import { createSignedImageUrl } from "@/lib/attachments";
 
 const WIDTH = 820; // 書き出す画像の幅(CSS px 相当)
 const PAD = 44; // 外周の余白
@@ -32,6 +34,14 @@ const CALLOUT_PAD = 16;
 
 function fontOf(size: number, weight = 400, italic = false) {
   return `${italic ? "italic " : ""}${weight} ${size}px ${FONT_STACK}`;
+}
+
+// 画像URL署名用のブラウザ Supabase クライアント。書き出しはブラウザでのみ実行される
+// ため、SSR/ビルド時の import で作らないよう、初回利用時に遅延生成する。
+let _supabase: ReturnType<typeof createClient> | null = null;
+function getSupabase() {
+  if (!_supabase) _supabase = createClient();
+  return _supabase;
 }
 
 type Seg = { text: string; font: string; color: string };
@@ -130,7 +140,10 @@ async function collectBlocks(parent: PMNode): Promise<Block[]> {
         marginBottom: 6,
       });
     } else if (name === "imageBlock") {
-      const img = await loadImage(String(node.attrs.src ?? ""));
+      // 本文には Storage パス（旧データは公開URL）が入っている。非公開バケット
+      // のため、fetch 可能な署名付きURLへ解決してから読み込む。
+      const signed = await createSignedImageUrl(getSupabase(), String(node.attrs.src ?? ""));
+      const img = await loadImage(signed);
       if (img) blocks.push({ kind: "image", img, marginTop: 6, marginBottom: 12 });
     } else if (name === "sketch") {
       const strokes = deserialize(String(node.attrs.strokes ?? "[]"));

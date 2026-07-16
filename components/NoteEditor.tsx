@@ -31,6 +31,7 @@ import {
   deleteAttachment,
   uploadImage,
 } from "@/lib/attachments";
+import { useSignedUrl } from "@/lib/useSignedUrl";
 import RichTextToolbar from "./RichTextToolbar";
 import FolderPickerSheet from "./FolderPickerSheet";
 
@@ -318,7 +319,9 @@ export default function NoteEditor({
     for (const file of files) {
       try {
         const img = await compressImage(file);
-        const { url } = await uploadImage(
+        // 本文には Storage パスを保存する（非公開バケット）。表示時に
+        // ImageBlockView が署名付きURLへ解決する。
+        const { path } = await uploadImage(
           supabase,
           userId,
           note.id,
@@ -329,7 +332,7 @@ export default function NoteEditor({
           .chain()
           .focus()
           .insertContent([
-            { type: "imageBlock", attrs: { src: url, w: img.width, h: img.height } },
+            { type: "imageBlock", attrs: { src: path, w: img.width, h: img.height } },
             { type: "paragraph" },
           ])
           .run();
@@ -816,61 +819,14 @@ export default function NoteEditor({
       {/* 添付ファイル */}
       {attachments.length > 0 && (
         <div className="thin-scroll flex flex-wrap gap-2 border-t border-brand-200/60 px-4 py-3 dark:border-neutral-800">
-          {attachments.map((a) =>
-            a.type === "image" ? (
-              <div
-                key={a.id}
-                className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-brand-100 dark:bg-neutral-800"
-              >
-                <a href={a.file_url} target="_blank" rel="noopener noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={a.file_url}
-                    alt={a.file_name}
-                    className="h-full w-full object-cover"
-                  />
-                </a>
-                {!trashed && (
-                  <button
-                    onClick={() => handleDeleteAttachment(a)}
-                    title="削除"
-                    className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
-                  >
-                    <IconClose className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div
-                key={a.id}
-                className="flex max-w-[12rem] items-center gap-2 rounded-lg bg-brand-100 py-1.5 pl-3 pr-2 text-sm dark:bg-neutral-800"
-              >
-                <a
-                  href={a.file_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-w-0 items-center gap-2"
-                >
-                  <IconFile className="h-4 w-4 shrink-0 text-neutral-500" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{a.file_name}</span>
-                    <span className="block text-xs text-neutral-400">
-                      {formatFileSize(a.file_size)}
-                    </span>
-                  </span>
-                </a>
-                {!trashed && (
-                  <button
-                    onClick={() => handleDeleteAttachment(a)}
-                    title="削除"
-                    className="shrink-0 text-neutral-400 hover:text-red-600"
-                  >
-                    <IconClose className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            ),
-          )}
+          {attachments.map((a) => (
+            <AttachmentItem
+              key={a.id}
+              attachment={a}
+              trashed={trashed}
+              onDelete={() => handleDeleteAttachment(a)}
+            />
+          ))}
         </div>
       )}
 
@@ -882,6 +838,75 @@ export default function NoteEditor({
         />
       )}
 
+    </div>
+  );
+}
+
+// 添付ストリップの1件。file_url（Storageパス／旧URL）を署名付きURLへ解決して表示する。
+function AttachmentItem({
+  attachment: a,
+  trashed,
+  onDelete,
+}: {
+  attachment: Attachment;
+  trashed: boolean;
+  onDelete: () => void;
+}) {
+  const url = useSignedUrl(a.file_url);
+
+  if (a.type === "image") {
+    return (
+      <div className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-brand-100 dark:bg-neutral-800">
+        {url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={a.file_name}
+              className="h-full w-full object-cover"
+            />
+          </a>
+        ) : (
+          <div className="h-full w-full animate-pulse" />
+        )}
+        {!trashed && (
+          <button
+            onClick={onDelete}
+            title="削除"
+            className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+          >
+            <IconClose className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex max-w-[12rem] items-center gap-2 rounded-lg bg-brand-100 py-1.5 pl-3 pr-2 text-sm dark:bg-neutral-800">
+      <a
+        href={url || undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex min-w-0 items-center gap-2"
+      >
+        <IconFile className="h-4 w-4 shrink-0 text-neutral-500" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">{a.file_name}</span>
+          <span className="block text-xs text-neutral-400">
+            {formatFileSize(a.file_size)}
+          </span>
+        </span>
+      </a>
+      {!trashed && (
+        <button
+          onClick={onDelete}
+          title="削除"
+          className="shrink-0 text-neutral-400 hover:text-red-600"
+        >
+          <IconClose className="h-3 w-3" />
+        </button>
+      )}
     </div>
   );
 }

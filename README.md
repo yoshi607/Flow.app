@@ -78,23 +78,50 @@ Supabase はデータベース・認証・ファイル保存をまとめて提�
 > Realtime を ON にします。ただし削除の同期には `REPLICA IDENTITY FULL` が
 > 必要なため、上記 SQL の実行を推奨します。
 
-### 4. ストレージ（画像・添付用／将来の拡張向け）
+### 4. ストレージ（画像・添付用）
 
 1. 左メニュー **「Storage」→「New bucket」**。
-2. 名前を `attachments` にして作成（Public は OFF のままで可）。
+2. 名前を `attachments` にして作成し、**Public は必ず OFF（非公開）** にする。
+3. SQL Editor で
+   [`supabase/migrations/0004_private_attachments.sql`](supabase/migrations/0004_private_attachments.sql)
+   を実行し、**バケットの非公開化と「本人のみ読み取り」ポリシー**を適用する。
+   （何度実行しても安全）
 
-> 画像添付機能は今後のフェーズで使います。今すぐ使わなければスキップしても構いません。
+> 添付画像は本人以外に見えないよう、アプリ側は**署名付きURL（有効期限つき）**で
+> 表示します。バケットを Public にしてしまうと URL を知る誰でも閲覧できてしまうため、
+> 必ず非公開のままにしてください。
 
 ### 5. 認証（ログイン方法）の設定
 
 1. 左メニュー **「Authentication」→「Providers」**。
 2. **Email** が有効になっていることを確認（既定で有効）。
    - すぐ試したい場合は「Confirm email」を一時的に OFF にするとメール確認なしで登録できます。
+   - **本番公開時は「Confirm email」を必ず ON に戻してください**（他人のメールでの
+     なりすまし登録を防ぐため）。
 3. （任意）**Google ログイン**を使う場合は Google プロバイダを有効化し、
    Google Cloud で OAuth クライアントを作成して Client ID / Secret を設定します。
 4. 「Authentication」→「URL Configuration」で **Site URL** に
    ローカル開発なら `http://localhost:3000` を設定。
    （Vercel 公開後は公開URLも「Redirect URLs」に追加してください）
+
+#### ログインを強固にする（推奨設定）
+
+アプリのログイン画面は、新規登録時に「10文字以上・3種類以上の文字種」を要求します。
+さらに Supabase ダッシュボードで以下を有効にすると、より安全です（コードでは設定できない項目）。
+
+パスワード関連は **Email プロバイダ設定**の中（下へスクロール）にまとまっています。
+UI のバージョンによりメニュー名が「Providers」「Sign In / Providers」等と異なるため、
+**直接この URL を開くのが確実**です：`/dashboard/project/<プロジェクトID>/auth/providers?provider=Email`
+
+- **Minimum password length**：`10` 以上（全プラン可）。
+- **Password Requirements**：英大文字・小文字・数字・記号を要求する条件を選択（全プラン可）。
+- **Confirm email**：本番では **ON**（同じ Email プロバイダ内・全プラン可）。
+- **Prevent use of leaked passwords（漏洩パスワード保護 / HaveIBeenPwned）**：**ON**。
+  ただし **Pro プラン以上でのみ利用可**（無料プランでは表示されない／設定不可）。
+- **Rate Limits**（Authentication → Rate Limits）：既定のレート制限を維持（総当たり対策）。
+
+> **MFA（2要素認証）** はダッシュボードのトグルだけでは使えません。アプリ側に登録・
+> 検証フロー（`supabase.auth.mfa.*`）の実装が別途必要です（今後の拡張）。
 
 ### 6. 接続情報を .env.local に書く
 

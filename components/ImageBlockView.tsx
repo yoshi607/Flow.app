@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
+import { useSignedUrl } from "@/lib/useSignedUrl";
 import { IconTrash } from "./icons";
 
 // 本文に埋め込んだ画像。本文では小さく表示し、タップで全画面拡大する。
@@ -10,7 +11,10 @@ export default function ImageBlockView({
   deleteNode,
   editor,
 }: NodeViewProps) {
-  const src: string = node.attrs.src || "";
+  // 本文には Storage パス（旧データは公開URL）が入っている。
+  // 非公開バケットのため、表示のたびに署名付きURLへ解決する。
+  const stored: string = node.attrs.src || "";
+  const src = useSignedUrl(stored);
   const w: number = node.attrs.w || 0;
   const h: number = node.attrs.h || 0;
   const [zoom, setZoom] = useState(false);
@@ -34,19 +38,27 @@ export default function ImageBlockView({
         {/* サムネイル（小さく表示）。タップで全画面 */}
         <button
           type="button"
-          onClick={openZoom}
+          onClick={src ? openZoom : undefined}
           className="block overflow-hidden rounded-lg"
           title="タップで拡大"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt=""
-            width={w || undefined}
-            height={h || undefined}
-            className="max-h-56 w-auto max-w-full object-contain"
-            style={h && w ? { aspectRatio: `${w} / ${h}` } : undefined}
-          />
+          {src ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={src}
+              alt=""
+              width={w || undefined}
+              height={h || undefined}
+              className="max-h-56 w-auto max-w-full object-contain"
+              style={h && w ? { aspectRatio: `${w} / ${h}` } : undefined}
+            />
+          ) : (
+            /* 署名付きURL解決中のプレースホルダ（レイアウト崩れ防止） */
+            <div
+              className="max-h-56 w-40 animate-pulse rounded-lg bg-brand-100 dark:bg-neutral-800"
+              style={h && w ? { aspectRatio: `${w} / ${h}` } : { aspectRatio: "4 / 3" }}
+            />
+          )}
         </button>
 
         {editable && (

@@ -6,6 +6,24 @@ import { createClient } from "@/lib/supabase/client";
 
 type Mode = "signin" | "signup" | "magic";
 
+// 新規登録時のパスワード強度チェック（クライアント側の第一関門）。
+// ※サーバー側でも Supabase ダッシュボードで「最低文字数」「漏洩パスワード保護
+//   (HaveIBeenPwned)」を有効にすること。ここだけでは迂回されうるため。
+function passwordIssue(pw: string): string | null {
+  if (pw.length < 10) return "パスワードは10文字以上にしてください。";
+  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((r) =>
+    r.test(pw),
+  ).length;
+  if (classes < 3) {
+    return "英小文字・英大文字・数字・記号のうち、3種類以上を含めてください。";
+  }
+  // ありがちな弱いパスワードを軽くはじく
+  if (/^(?:password|passw0rd|12345678|qwerty)/i.test(pw)) {
+    return "推測されやすいパスワードです。別のものにしてください。";
+  }
+  return null;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   // 毎回の再描画で作り直さない（作り直すと認証リスナーが増えてしまう）
@@ -39,6 +57,12 @@ export default function LoginPage() {
         router.push("/");
         router.refresh();
       } else if (mode === "signup") {
+        const issue = passwordIssue(password);
+        if (issue) {
+          setError(issue);
+          setLoading(false);
+          return;
+        }
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         setMessage(
@@ -124,15 +148,24 @@ export default function LoginPage() {
             className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
           />
           {mode !== "magic" && (
-            <input
-              type="password"
-              name="password"
-              required
-              minLength={6}
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              placeholder="パスワード（6文字以上）"
-              className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
-            />
+            <>
+              <input
+                type="password"
+                name="password"
+                required
+                minLength={mode === "signup" ? 10 : 6}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                placeholder={
+                  mode === "signup" ? "パスワード（10文字以上）" : "パスワード"
+                }
+                className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
+              />
+              {mode === "signup" && (
+                <p className="text-xs text-neutral-400">
+                  10文字以上。英小文字・英大文字・数字・記号のうち3種類以上を含めてください。
+                </p>
+              )}
+            </>
           )}
           <button
             type="submit"
