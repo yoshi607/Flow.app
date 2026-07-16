@@ -35,6 +35,7 @@ import {
   IconRestore,
   IconExpand,
   IconCompress,
+  IconShare,
   IconWindow,
   IconClose,
   IconDots,
@@ -78,6 +79,30 @@ export default function NoteEditor({
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   // 書式ツールバーの表示（「Aa」で開閉。既定は畳んでおき上部をすっきりさせる）
   const [formatOpen, setFormatOpen] = useState(false);
+  const [formatClosing, setFormatClosing] = useState(false);
+  // md 以上（3分割）かどうか。短期バッジの出し分けに使う
+  const [isWide, setIsWide] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsWide(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  // Aa の開閉。閉じるときはアニメーションを見せてから畳む
+  function toggleFormat() {
+    if (formatOpen && !formatClosing) {
+      setFormatClosing(true);
+      window.setTimeout(() => {
+        setFormatOpen(false);
+        setFormatClosing(false);
+      }, 240); // flow-format-out と同じ長さ
+    } else if (!formatOpen) {
+      setFormatOpen(true);
+    }
+  }
   const { isIPad } = useDevice();
 
   // 削除。一覧・本文それぞれの消えるアニメーションを揃えるため、
@@ -106,6 +131,12 @@ export default function NoteEditor({
 
   const trashed = note.status === "trashed";
   const tags = note.tags ?? [];
+
+  // 短期メモの残り日数バッジ。3分割（md かつ全画面でない）では出さず、
+  // 全画面表示のとき・モバイルでのみ表示する。
+  const shortDays =
+    note.type === "short" ? shortNoteRemainingDays(note.expires_at) : null;
+  const badgeVisible = shortDays !== null && (isFullscreen || !isWide);
 
   // key={note.id} で都度マウントされるため、この effect は「ノートが
   // 開かれるたび1回」だけ走る（他デバイスでの添付操作はRealtime対象外）
@@ -444,6 +475,16 @@ export default function NoteEditor({
             {isFullscreen ? <IconCompress /> : <IconExpand />}
           </button>
         )}
+        {/* 共有（全画面ボタンの隣） */}
+        {!trashed && (
+          <button
+            onClick={() => shareNote(note.title, note.body)}
+            className="flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+            title="共有"
+          >
+            <IconShare />
+          </button>
+        )}
 
         <div className="flex-1" />
 
@@ -451,7 +492,7 @@ export default function NoteEditor({
           <>
             {/* 書式（Aa）：下の書式ツールバーの表示を切り替える */}
             <button
-              onClick={() => setFormatOpen((v) => !v)}
+              onClick={toggleFormat}
               className={`flow-press rounded-full px-3 py-1.5 text-sm font-semibold transition ${
                 formatOpen
                   ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
@@ -634,27 +675,23 @@ export default function NoteEditor({
             完全に削除
           </button>
         </div>
-      ) : formatOpen || note.type === "short" ? (
+      ) : formatOpen || badgeVisible ? (
         // 書式ツールバー行。「Aa」を押したときだけ書式ツールを出す。
-        // Aa を押したことが分かるよう、開いている間は背景色でグループ化する。
-        // 短期メモのバッジは（Aa が閉じていても）常に見せる。
-        <div
-          className={`flex flex-wrap items-center gap-3 border-b border-brand-200/60 px-4 py-2 transition-colors dark:border-neutral-800 ${
-            formatOpen ? "bg-brand-100/60 dark:bg-neutral-800/50" : ""
-          }`}
-        >
-          {note.type === "short" &&
-            (() => {
-              const d = shortNoteRemainingDays(note.expires_at);
-              return d !== null ? (
-                <span className="rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
-                  短期・あと{d}日
-                </span>
-              ) : null;
-            })()}
+        <div className="flex flex-wrap items-center gap-3 border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
+          {/* 短期メモのバッジ。3分割（md）では出さず、全画面・モバイルでのみ表示 */}
+          {badgeVisible && (
+            <span className="flow-badge-in rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+              短期・あと{shortDays}日
+            </span>
+          )}
           <div className="flex-1" />
           {formatOpen && (
-            <div className="flow-format-in">
+            // Aa を押したことが分かるよう、書式ツールを丸みのある背景でまとめる
+            <div
+              className={`${
+                formatClosing ? "flow-format-out" : "flow-format-in"
+              } rounded-2xl bg-brand-100/70 px-2 py-1 dark:bg-neutral-800/70`}
+            >
               <RichTextToolbar editor={editor} />
             </div>
           )}

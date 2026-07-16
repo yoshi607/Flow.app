@@ -116,28 +116,31 @@ export default function Sidebar({
 
         <div className="pt-3">
           <div className="flex items-center justify-between px-3 pb-1">
-            <button
-              onClick={() => setFoldersOpen((v) => !v)}
-              className="flex items-center gap-1 text-neutral-400 transition hover:text-neutral-600 dark:hover:text-neutral-200"
-            >
-              <span className="text-xs font-medium uppercase tracking-wide">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
                 フォルダ
               </span>
+              <button
+                onClick={() => {
+                  setFoldersOpen(true);
+                  setAdding(true);
+                }}
+                className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                title="フォルダを追加"
+              >
+                <IconPlus className="h-4 w-4" />
+              </button>
+            </div>
+            <button
+              onClick={() => setFoldersOpen((v) => !v)}
+              className="text-neutral-400 transition hover:text-neutral-600 dark:hover:text-neutral-200"
+              title={foldersOpen ? "フォルダを閉じる" : "フォルダを開く"}
+            >
               <IconChevron
                 className={`h-4 w-4 transition-transform ${
                   foldersOpen ? "" : "-rotate-90"
                 }`}
               />
-            </button>
-            <button
-              onClick={() => {
-                setFoldersOpen(true);
-                setAdding(true);
-              }}
-              className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
-              title="フォルダを追加"
-            >
-              <IconPlus className="h-4 w-4" />
             </button>
           </div>
 

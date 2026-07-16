@@ -368,8 +368,9 @@ body {
   transform-origin: top right;
 }
 
-/* ===== 書式（Aa）ツールバーの出現 =====
-   Aa を押したときに、書式ツールが Aa の位置（右上）から広がって現れる。 */
+/* ===== 書式（Aa）ツールバーの開閉 =====
+   Aa を押したときに、書式ツールが Aa の位置（右上）から広がって現れ、
+   閉じるときは逆に縮んで消える。 */
 @keyframes flow-format-in {
   from {
     opacity: 0;
@@ -381,8 +382,38 @@ body {
   }
 }
 .flow-format-in {
-  animation: flow-format-in 220ms var(--ease-spring);
+  animation: flow-format-in 340ms var(--ease-spring);
   transform-origin: top right;
+}
+@keyframes flow-format-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.8) translateY(-6px);
+  }
+}
+.flow-format-out {
+  animation: flow-format-out 240ms var(--ease-out) forwards;
+  transform-origin: top right;
+}
+
+/* 短期メモのバッジが現れるとき（全画面切替時など） */
+@keyframes flow-badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.flow-badge-in {
+  animation: flow-badge-in 280ms var(--ease-spring);
+  transform-origin: left center;
 }
 
 /* ===== 左スワイプ操作 ===== */
