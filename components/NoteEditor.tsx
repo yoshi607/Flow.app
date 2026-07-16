@@ -43,6 +43,7 @@ import {
   IconPencil,
   IconImage,
   IconArchive,
+  IconClip,
 } from "./icons";
 
 export default function NoteEditor({
@@ -76,6 +77,8 @@ export default function NoteEditor({
   const [recording, setRecording] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  // 挿入（写真・音声・手書き）をまとめたクリップメニューの開閉
+  const [insertMenuOpen, setInsertMenuOpen] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   // 書式ツールバーの表示（「Aa」で開閉。既定は畳んでおき上部をすっきりさせる）
   const [formatOpen, setFormatOpen] = useState(false);
@@ -508,33 +511,74 @@ export default function NoteEditor({
               Aa
             </button>
 
-            {/* 挿入（画像・音声・手書き）を1つのピルにまとめる */}
-            <div className="flex items-center gap-0.5 rounded-full bg-brand-100/70 p-0.5 dark:bg-neutral-800/70">
+            {/* 挿入（写真・音声・手書き）を1つのクリップボタンにまとめる。
+                押すとメニューがボタンの位置から広がって現れる（Aa と同じ動き）。 */}
+            <div className="relative">
               <button
-                onClick={() => imageInputRef.current?.click()}
-                disabled={uploading}
-                className="flow-press rounded-full p-1.5 text-neutral-600 hover:bg-brand-200/70 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-700"
-                title="写真を本文に挿入"
+                onClick={() => setInsertMenuOpen((v) => !v)}
+                className={`flow-press rounded-full p-2 transition ${
+                  insertMenuOpen
+                    ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
+                    : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+                }`}
+                title="挿入"
+                aria-haspopup="menu"
+                aria-expanded={insertMenuOpen}
               >
-                <IconImage />
+                <IconClip />
               </button>
-              <button
-                onClick={startRecording}
-                disabled={recording}
-                className="flow-press rounded-full p-1.5 text-neutral-600 hover:bg-brand-200/70 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-700"
-                title="音声メモ"
-              >
-                <IconMic />
-              </button>
-              {/* 手書き（①）：iPad のみ表示。Apple Pencil での描画を想定 */}
-              {isIPad && (
-                <button
-                  onClick={insertSketch}
-                  className="flow-press rounded-full p-1.5 text-neutral-600 hover:bg-brand-200/70 dark:text-neutral-300 dark:hover:bg-neutral-700"
-                  title="手書き"
-                >
-                  <IconPencil />
-                </button>
+              {insertMenuOpen && (
+                <>
+                  {/* 画面外タップで閉じる */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setInsertMenuOpen(false)}
+                  />
+                  {/* アニメーションと背景色は Aa パネル・3点メニューと揃える */}
+                  <div
+                    role="menu"
+                    className="flow-format-in absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800"
+                  >
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setInsertMenuOpen(false);
+                        imageInputRef.current?.click();
+                      }}
+                      disabled={uploading}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 disabled:opacity-50 dark:hover:bg-neutral-800/70"
+                    >
+                      <IconImage className="h-4 w-4 text-neutral-500" />
+                      写真
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setInsertMenuOpen(false);
+                        startRecording();
+                      }}
+                      disabled={recording}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 disabled:opacity-40 dark:hover:bg-neutral-800/70"
+                    >
+                      <IconMic className="h-4 w-4 text-neutral-500" />
+                      音声メモ
+                    </button>
+                    {/* 手書き（①）：iPad のみ。Apple Pencil での描画を想定 */}
+                    {isIPad && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setInsertMenuOpen(false);
+                          insertSketch();
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
+                      >
+                        <IconPencil className="h-4 w-4 text-neutral-500" />
+                        手書き
+                      </button>
+                    )}
+                  </div>
+                </>
               )}
             </div>
             <input
