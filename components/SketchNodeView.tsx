@@ -12,7 +12,7 @@ import {
   strokeNear,
   type Stroke,
 } from "@/lib/sketch/strokes";
-import { IconEraser, IconTrash } from "./icons";
+import { IconEraser, IconRedo, IconTrash, IconUndo } from "./icons";
 
 // 色・太さの選択ポップアップ（本文のツールバーと同じ作りに揃えている）
 function Popover({
@@ -88,6 +88,21 @@ export default function SketchNodeView({
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
 
+  // ブロック内の戻す/送る履歴（線の状態のスナップショット列）。
+  // 描画中はエディタ全体が編集不可で本文のCmd+Zが使えないため、
+  // ブロック内で完結する履歴を持つ。描画・消しゴムを同じ仕組みで戻せる。
+  const historyRef = useRef<string[]>([node.attrs.strokes ?? "[]"]);
+  const histIndexRef = useRef(0);
+  const [hist, setHist] = useState({ canUndo: false, canRedo: false });
+  const syncHist = useCallback(() => {
+    setHist({
+      canUndo: histIndexRef.current > 0,
+      canRedo: histIndexRef.current < historyRef.current.length - 1,
+    });
+  }, []);
+  // 履歴の上限（メモリの暴走を防ぐ）
+  const HISTORY_MAX = 50;
+
   // --- 描き直し ---------------------------------------------------------
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -148,13 +163,49 @@ export default function SketchNodeView({
   }, [node.attrs.strokes, redraw]);
 
   // --- 保存 -------------------------------------------------------------
+  // 線を1本引いた／消したときに呼ぶ。本文へ保存し、履歴にも積む。
   const commit = useCallback(() => {
     const s = serialize(strokesRef.current);
     // 何も変わっていないなら本文を触らない（消しゴムの空振り等）
     if (s === lastSerialized.current) return;
     lastSerialized.current = s;
     updateAttributes({ strokes: s });
-  }, [updateAttributes]);
+
+    // 戻す途中で新しく描いたら、それ以降の送る履歴は捨てる
+    const cut = historyRef.current.slice(0, histIndexRef.current + 1);
+    cut.push(s);
+    if (cut.length > HISTORY_MAX) cut.shift();
+    historyRef.current = cut;
+    histIndexRef.current = cut.length - 1;
+    syncHist();
+  }, [updateAttributes, syncHist]);
+
+  // 履歴の任意の地点を表示に反映する（戻す/送る共通）
+  const applySnapshot = useCallback(
+    (s: string) => {
+      lastSerialized.current = s;
+      strokesRef.current = deserialize(s);
+      currentRef.current = null;
+      updateAttributes({ strokes: s });
+      redraw();
+      syncHist();
+    },
+    [updateAttributes, redraw, syncHist],
+  );
+
+  const undo = useCallback(() => {
+    setOpenMenu(null);
+    if (histIndexRef.current <= 0) return;
+    histIndexRef.current -= 1;
+    applySnapshot(historyRef.current[histIndexRef.current]);
+  }, [applySnapshot]);
+
+  const redo = useCallback(() => {
+    setOpenMenu(null);
+    if (histIndexRef.current >= historyRef.current.length - 1) return;
+    histIndexRef.current += 1;
+    applySnapshot(historyRef.current[histIndexRef.current]);
+  }, [applySnapshot]);
 
   // --- 入力 -------------------------------------------------------------
   // CSS px → 基準幅における px
@@ -452,6 +503,28 @@ export default function SketchNodeView({
             }`}
           >
             <IconEraser className="h-5 w-5" />
+          </button>
+
+          {/* 1つ戻す / 1つ送る */}
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!hist.canUndo}
+            title="1つ戻す"
+            aria-label="1つ戻す"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30 dark:hover:bg-neutral-800"
+          >
+            <IconUndo className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!hist.canRedo}
+            title="1つ送る"
+            aria-label="1つ送る"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30 dark:hover:bg-neutral-800"
+          >
+            <IconRedo className="h-5 w-5" />
           </button>
 
           <div className="flex-1" />

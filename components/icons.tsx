@@ -201,6 +201,18 @@ export const IconPencil = ({ className = base }: P) => (
   </svg>
 );
 
+export const IconUndo = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-1" />
+  </svg>
+);
+
+export const IconRedo = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m15 7 5 5-5 5M20 12H9a5 5 0 0 0 0 10h1" />
+  </svg>
+);
+
 export const IconEraser = ({ className = base }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M15.5 3.5 21 9a1.5 1.5 0 0 1 0 2.1l-8.4 8.4H8.5l-5-5a1.5 1.5 0 0 1 0-2.1l9-9a1.5 1.5 0 0 1 2.1 0Z" />
