@@ -16,6 +16,7 @@ import { TranscriptCallout } from "@/lib/tiptap/transcriptCallout";
 import { Sketch } from "@/lib/tiptap/sketch";
 import { ImageBlock } from "@/lib/tiptap/imageBlock";
 import { compressImage } from "@/lib/images/compress";
+import { downloadNoteAsPng } from "@/lib/exportImage";
 import {
   listAttachments,
   deleteAttachment,
@@ -44,6 +45,7 @@ import {
   IconImage,
   IconArchive,
   IconClip,
+  IconDownload,
 } from "./icons";
 
 export default function NoteEditor({
@@ -157,6 +159,7 @@ export default function NoteEditor({
   const supabase = useMemo(() => createClient(), []);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // 録音中に書き込む対象のコールアウトを特定するID
   const sessionRef = useRef<string | null>(null);
@@ -468,6 +471,21 @@ export default function NoteEditor({
     updateNote(note.id, { body: editor.getHTML() }, true);
   }
 
+  // メモ（タイトル＋本文）を1枚のPNGにして保存する
+  async function downloadAsImage() {
+    if (!editor || exporting) return;
+    setExporting(true);
+    try {
+      await downloadNoteAsPng(editor.state.doc, note.title);
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? err.message : "画像の書き出しに失敗しました",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function addTag(raw: string) {
     const tag = raw.trim().replace(/^#/, "");
     setTagInput("");
@@ -694,6 +712,18 @@ export default function NoteEditor({
                     >
                       <IconMove className="h-4 w-4 text-neutral-500" />
                       フォルダを変更
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        closeMenu();
+                        void downloadAsImage();
+                      }}
+                      disabled={exporting}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 disabled:opacity-50 dark:hover:bg-neutral-800/70"
+                    >
+                      <IconDownload className="h-4 w-4 text-neutral-500" />
+                      {exporting ? "書き出し中…" : "メモを画像としてダウンロード"}
                     </button>
                     <div className="my-1 border-t border-brand-200/60 dark:border-neutral-800" />
                     <button
