@@ -315,6 +315,12 @@ function drawBlocks(
     } else if (b.kind === "sketch") {
       const scale = width / (b.refW || width);
       ctx.save();
+      // 画面側のブロックは overflow:hidden で切れているので、書き出しでも
+      // 同じように枠外へはみ出した線を出さない（キャンバスの外にある線や、
+      // 下端で見切れている線が丸ごと見えてしまうのを防ぐ）
+      ctx.beginPath();
+      ctx.rect(x, y, width, b.height ?? 0);
+      ctx.clip();
       ctx.translate(x, y);
       replay(ctx, b.strokes, scale);
       ctx.restore();

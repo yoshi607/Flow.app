@@ -720,10 +720,10 @@ export default function NoteEditor({
                         void downloadAsImage();
                       }}
                       disabled={exporting}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 disabled:opacity-50 dark:hover:bg-neutral-800/70"
+                      className="flex w-full items-center gap-3 whitespace-nowrap px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 disabled:opacity-50 dark:hover:bg-neutral-800/70"
                     >
-                      <IconDownload className="h-4 w-4 text-neutral-500" />
-                      {exporting ? "書き出し中…" : "メモを画像としてダウンロード"}
+                      <IconDownload className="h-4 w-4 shrink-0 text-neutral-500" />
+                      {exporting ? "書き出し中…" : "画像としてダウンロード"}
                     </button>
                     <div className="my-1 border-t border-brand-200/60 dark:border-neutral-800" />
                     <button
