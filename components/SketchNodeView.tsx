@@ -51,11 +51,6 @@ const ERASER_R = 12;
 // iOS Safari は概ね 16.7M px でキャンバスが無効になる
 const MAX_CANVAS_AREA = 16_000_000;
 
-// 【一時的な実測用】「描画中に指でスクロールできない」報告の原因調査。
-// true の間、描画モード中は画面左下にイベントログが出る。
-// 原因が確定したら、このフラグとログ表示・penInput の debug ごと削除する。
-const SCROLL_DEBUG = true;
-
 // 本文に埋め込む手書きブロック（Apple メモのインラインスケッチ相当）。
 // 線データはノードの属性に入り、本文の保存（350msデバウンス）にそのまま乗る。
 export default function SketchNodeView({
@@ -365,29 +360,14 @@ export default function SketchNodeView({
     deleteNode();
   }, [deleteNode]);
 
-  // 【一時的な実測用】イベントログ。React の再描画を避けるため DOM に直接書く
-  const debugRef = useRef<HTMLDivElement>(null);
-  const debugLines = useRef<string[]>([]);
-  const debugLog = useCallback((line: string) => {
-    const buf = debugLines.current;
-    buf.push(line);
-    if (buf.length > 14) buf.shift();
-    const el = debugRef.current;
-    if (el) el.textContent = buf.join("\n");
-  }, []);
-
   // 入力の購読は描画モードの間だけ（実処理は上の handlers.current を読む）
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !editable || !drawing) return;
     // 本文のスクロール領域（.ProseMirror）を指スクロールの対象にする
     const scroller = canvas.closest(".ProseMirror") as HTMLElement | null;
-    return attachPenInput(canvas, handlers, {
-      scroller,
-      viewport: scroller,
-      debug: SCROLL_DEBUG ? debugLog : null,
-    });
-  }, [editable, drawing, debugLog]);
+    return attachPenInput(canvas, handlers, { scroller, viewport: scroller });
+  }, [editable, drawing]);
 
   return (
     <NodeViewWrapper
@@ -595,17 +575,6 @@ export default function SketchNodeView({
           style={{ touchAction: drawing ? "none" : "auto" }}
         />
       </div>
-
-      {/* 【一時的な実測用】イベントログ。pointer-events:none なので
-          触っても入力判定には一切影響しない（data-sketch-ui も付けない） */}
-      {SCROLL_DEBUG && drawing && (
-        <div
-          ref={debugRef}
-          className="pointer-events-none fixed bottom-2 left-2 z-[100] max-w-[70vw] whitespace-pre rounded-md bg-black/75 px-2 py-1 font-mono text-[10px] leading-tight text-green-300"
-        >
-          ログ待機中…（指でキャンバスをなぞってください）
-        </div>
-      )}
     </NodeViewWrapper>
   );
 }

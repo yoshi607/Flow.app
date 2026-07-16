@@ -28,8 +28,6 @@ export type PenOptions = {
   viewport?: HTMLElement | null;
   /** 指でなぞったときにスクロールさせる要素 */
   scroller?: HTMLElement | null;
-  /** 【一時的な実測用】指スクロール不調の原因調査ログ。確定したら消す */
-  debug?: ((line: string) => void) | null;
 };
 
 export function attachPenInput(
@@ -37,23 +35,12 @@ export function attachPenInput(
   handlers: { current: PenHandlers },
   options: PenOptions = {},
 ): () => void {
-  const { viewport = null, scroller = null, debug = null } = options;
-  const dbg = (line: string) => {
-    if (debug) debug(line);
-  };
+  const { viewport = null, scroller = null } = options;
 
   let drawing = false;
   let activeId: number | null = null;
   let strokeStart = 0;
   let penSeen = false;
-  // ログの洪水を防ぐ（スクロール追跡から外れた touch move の記録は数回まで）
-  let strayLogged = 0;
-
-  dbg(
-    `開始 scroller=${scroller ? "あり" : "なし"} 可動域=${
-      scroller ? scroller.scrollHeight - scroller.clientHeight : 0
-    }px`,
-  );
 
   // 指1本でのスクロール中のポインタ
   let scrollId: number | null = null;
@@ -131,40 +118,22 @@ export function attachPenInput(
   };
 
   const onDown = (e: PointerEvent) => {
-    if (overUi(e)) {
-      dbg(`down ${e.pointerType} → UIの上なので無視`);
-      return;
-    }
+    if (overUi(e)) return;
 
     // 指はメモのスクロールに使う。
     // ※ touchstart/touchmove は下で全て preventDefault しており、ブラウザ標準の
     //   スクロールは効かない（2画目対策を緩めないため）。そこで scrollTop を
     //   自分で動かす。判定は実績のある pointerType のみに頼る。
     if (e.pointerType === "touch" && handlers.current.penOnly) {
-      if (!scroller) {
-        dbg("down touch → scrollerが無い");
-        return;
-      }
-      if (!insideCanvas(e)) {
-        dbg("down touch → キャンバス外（標準スクロールに任せる）");
-        return;
-      }
+      if (!scroller || !insideCanvas(e)) return;
       scrollId = e.pointerId;
       scrollFromY = e.clientY;
       scrollFromTop = scroller.scrollTop;
-      dbg(`down touch id=${e.pointerId} → スクロール開始 top=${Math.round(scrollFromTop)}`);
       return;
     }
 
-    if (!shouldDraw(e)) {
-      dbg(`down ${e.pointerType} → 描画対象外`);
-      return;
-    }
-    if (!insideCanvas(e)) {
-      dbg(`down ${e.pointerType} → キャンバス外`);
-      return;
-    }
-    dbg(`down ${e.pointerType} → 描画開始`);
+    if (!shouldDraw(e)) return;
+    if (!insideCanvas(e)) return;
     e.preventDefault();
     // 前の筆が pointerup を取りこぼしていても、必ず新しい筆として開始する
     drawing = true;
@@ -175,25 +144,10 @@ export function attachPenInput(
 
   const onMove = (e: PointerEvent) => {
     if (scrollId === e.pointerId) {
-      if (scroller) {
-        const want = scrollFromTop - (e.clientY - scrollFromY);
-        scroller.scrollTop = want;
-        // 実際に動いたか（=正しい要素をスクロールしているか）まで記録する
-        dbg(
-          `move dy=${Math.round(e.clientY - scrollFromY)} top=${Math.round(scroller.scrollTop)}`,
-        );
-      }
+      if (scroller) scroller.scrollTop = scrollFromTop - (e.clientY - scrollFromY);
       return;
     }
-    if (!shouldDraw(e)) {
-      // スクロール追跡から外れた指の move。pointerdown が来ていない、
-      // または pointerId が変わった場合にここへ落ちる（原因調査の要所）
-      if (e.pointerType === "touch" && strayLogged < 5) {
-        strayLogged += 1;
-        dbg(`move touch id=${e.pointerId} → 追跡外 (scrollId=${scrollId})`);
-      }
-      return;
-    }
+    if (!shouldDraw(e)) return;
 
     // 【重要】down/up の記録だけに頼らず、「今ペンが実際に触れているか」を
     // buttons / pressure で判断する。iOS では画の途中で pointerup が
@@ -234,7 +188,6 @@ export function attachPenInput(
   const onUp = (e: PointerEvent) => {
     if (scrollId === e.pointerId) {
       scrollId = null;
-      dbg("up → スクロール終了");
       return;
     }
     if (!drawing) return;
@@ -252,9 +205,6 @@ export function attachPenInput(
   const onCancel = (e: PointerEvent) => {
     if (scrollId === e.pointerId) {
       scrollId = null;
-      // これが出るなら、ブラウザがジェスチャーを横取りして
-      // スクロール追跡が強制終了させられている
-      dbg("cancel → スクロールが中断された");
       return;
     }
     if (activeId !== e.pointerId) return;
@@ -264,12 +214,7 @@ export function attachPenInput(
   // 【重要】Safari は Apple Pencil に対して touch-action:none を効かせず、
   // ジェスチャー認識（ダブルタップ等）が働いて2画目の pointerdown を
   // 握りつぶすことがある。ペン/指のタッチ既定動作をここで明示的に止める。
-  const blockTouch = (e: TouchEvent) => {
-    e.preventDefault();
-    // touchstart は必ず発火する層。pointerdown が出ていないのに
-    // これだけ出るなら「pointer イベントが指に対して発火していない」と確定する
-    if (e.type === "touchstart") dbg(`touchstart 指${e.touches.length}本`);
-  };
+  const blockTouch = (e: TouchEvent) => e.preventDefault();
 
   // pointerdown も window のキャプチャで受ける（要素へのリターゲットや
   // 途中での stopPropagation に影響されないようにするため）
