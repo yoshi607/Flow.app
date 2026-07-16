@@ -96,6 +96,14 @@ export function attachPenInput(
   };
 
   const onDown = (e: PointerEvent) => {
+    // ツールバーや色・太さのポップアップの上での操作は描画にしない。
+    // これらはキャンバスの上に重なって表示されるため、座標だけの判定では
+    // 「キャンバス内」とみなされ、ペンで選ぶと同時に点が入ってしまう。
+    // preventDefault しないので、ボタンのタップはそのまま成立する。
+    if (e.target instanceof Element && e.target.closest("[data-sketch-ui]")) {
+      return;
+    }
+
     // 指はメモのスクロールに使う。
     // ※ touchstart/touchmove は下で全て preventDefault しており、ブラウザ標準の
     //   スクロールは効かない（2画目対策を緩めないため）。そこで scrollTop を

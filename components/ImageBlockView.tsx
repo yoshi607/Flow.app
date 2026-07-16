@@ -21,13 +21,20 @@ export default function ImageBlockView({
     deleteNode();
   }
 
+  // 拡大表示に入るとき、本文エディタ等のフォーカスを外す。
+  // これをしないと画面内キーボードが全画面表示に重なって出たままになる。
+  function openZoom() {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    setZoom(true);
+  }
+
   return (
     <NodeViewWrapper as="div" data-type="image" contentEditable={false}>
       <div className="relative inline-block">
         {/* サムネイル（小さく表示）。タップで全画面 */}
         <button
           type="button"
-          onClick={() => setZoom(true)}
+          onClick={openZoom}
           className="block overflow-hidden rounded-lg"
           title="タップで拡大"
         >

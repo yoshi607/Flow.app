@@ -27,6 +27,7 @@ function Popover({
       <div className="fixed inset-0 z-40" onClick={onClose} />
       {/* flow-menu-in は右上を起点にするので、左寄せのこちらは起点を合わせ直す */}
       <div
+        data-sketch-ui
         style={{ transformOrigin: "top left" }}
         className="flow-menu-in absolute left-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
       >
@@ -403,6 +404,7 @@ export default function SketchNodeView({
 
       {editable && drawing && (
         <div
+          data-sketch-ui
           className="flex flex-wrap items-center gap-2 px-2 py-1.5"
           // 【重要】ツールバーのボタンにフォーカスを移させない。
           // ボタンにフォーカスが残ると iPadOS のスクリブルの標的になり、
