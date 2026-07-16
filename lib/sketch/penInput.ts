@@ -95,14 +95,30 @@ export function attachPenInput(
     handlers.current.onStrokeEnd();
   };
 
-  const onDown = (e: PointerEvent) => {
-    // ツールバーや色・太さのポップアップの上での操作は描画にしない。
-    // これらはキャンバスの上に重なって表示されるため、座標だけの判定では
-    // 「キャンバス内」とみなされ、ペンで選ぶと同時に点が入ってしまう。
-    // preventDefault しないので、ボタンのタップはそのまま成立する。
-    if (e.target instanceof Element && e.target.closest("[data-sketch-ui]")) {
-      return;
+  // ツールバーや色・太さのポップアップの上での操作は描画にしない。
+  // これらはキャンバスの上に重なって表示されるため、座標だけの判定では
+  // 「キャンバス内」とみなされ、ペンで選ぶと同時に点が入ってしまう。
+  // 【重要】e.target での判定は不可。Safari は Apple Pencil の pointerdown の
+  // ターゲットを別要素へ付け替えるため、closest がすり抜ける（座標判定にして
+  // いるのと同じ理由）。UI 要素の矩形との重なりで座標判定する。
+  const overUi = (ev: PointerEvent) => {
+    const els = document.querySelectorAll("[data-sketch-ui]");
+    for (const el of Array.from(els)) {
+      const r = el.getBoundingClientRect();
+      if (
+        ev.clientX >= r.left &&
+        ev.clientX <= r.right &&
+        ev.clientY >= r.top &&
+        ev.clientY <= r.bottom
+      ) {
+        return true;
+      }
     }
+    return false;
+  };
+
+  const onDown = (e: PointerEvent) => {
+    if (overUi(e)) return;
 
     // 指はメモのスクロールに使う。
     // ※ touchstart/touchmove は下で全て preventDefault しており、ブラウザ標準の

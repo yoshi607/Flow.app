@@ -24,7 +24,9 @@ function Popover({
 }) {
   return (
     <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      {/* 外側タップで閉じる幕。開いている間はどこを触っても描画させない
+          （data-sketch-ui＝全面）ので、閉じるための1タップで点が入らない */}
+      <div data-sketch-ui className="fixed inset-0 z-40" onClick={onClose} />
       {/* flow-menu-in は右上を起点にするので、左寄せのこちらは起点を合わせ直す */}
       <div
         data-sketch-ui
