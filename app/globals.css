@@ -368,6 +368,23 @@ body {
   transform-origin: top right;
 }
 
+/* ===== 書式（Aa）ツールバーの出現 =====
+   Aa を押したときに、書式ツールが Aa の位置（右上）から広がって現れる。 */
+@keyframes flow-format-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.flow-format-in {
+  animation: flow-format-in 220ms var(--ease-spring);
+  transform-origin: top right;
+}
+
 /* ===== 左スワイプ操作 ===== */
 .flow-swipe-row {
   touch-action: pan-y;

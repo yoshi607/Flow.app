@@ -434,6 +434,17 @@ export default function NoteEditor({
           {standalone ? <IconClose /> : <IconBack />}
         </button>
 
+        {/* 全画面 / 全画面解除（md 以上のみ）。左側に配置 */}
+        {!trashed && onToggleFullscreen && (
+          <button
+            onClick={onToggleFullscreen}
+            className="hidden rounded-full p-2 text-neutral-500 hover:bg-brand-100 md:block dark:hover:bg-neutral-800"
+            title={isFullscreen ? "全画面を解除" : "全画面表示"}
+          >
+            {isFullscreen ? <IconCompress /> : <IconExpand />}
+          </button>
+        )}
+
         <div className="flex-1" />
 
         {!trashed && (
@@ -441,7 +452,7 @@ export default function NoteEditor({
             {/* 書式（Aa）：下の書式ツールバーの表示を切り替える */}
             <button
               onClick={() => setFormatOpen((v) => !v)}
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+              className={`flow-press rounded-full px-3 py-1.5 text-sm font-semibold transition ${
                 formatOpen
                   ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
                   : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
@@ -489,17 +500,6 @@ export default function NoteEditor({
               className="hidden"
               onChange={handleImageSelected}
             />
-
-            {/* 全画面（md 以上のみ） */}
-            {onToggleFullscreen && (
-              <button
-                onClick={onToggleFullscreen}
-                className="hidden rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 md:block"
-                title={isFullscreen ? "全画面を解除" : "全画面表示"}
-              >
-                {isFullscreen ? <IconCompress /> : <IconExpand />}
-              </button>
-            )}
 
             {/* 右上の3点メニュー（⑤） */}
             <div className="relative">
@@ -636,8 +636,13 @@ export default function NoteEditor({
         </div>
       ) : formatOpen || note.type === "short" ? (
         // 書式ツールバー行。「Aa」を押したときだけ書式ツールを出す。
+        // Aa を押したことが分かるよう、開いている間は背景色でグループ化する。
         // 短期メモのバッジは（Aa が閉じていても）常に見せる。
-        <div className="flex flex-wrap items-center gap-3 border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
+        <div
+          className={`flex flex-wrap items-center gap-3 border-b border-brand-200/60 px-4 py-2 transition-colors dark:border-neutral-800 ${
+            formatOpen ? "bg-brand-100/60 dark:bg-neutral-800/50" : ""
+          }`}
+        >
           {note.type === "short" &&
             (() => {
               const d = shortNoteRemainingDays(note.expires_at);
@@ -648,7 +653,11 @@ export default function NoteEditor({
               ) : null;
             })()}
           <div className="flex-1" />
-          {formatOpen && <RichTextToolbar editor={editor} />}
+          {formatOpen && (
+            <div className="flow-format-in">
+              <RichTextToolbar editor={editor} />
+            </div>
+          )}
         </div>
       ) : null}
 

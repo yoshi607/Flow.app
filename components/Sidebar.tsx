@@ -35,6 +35,7 @@ export default function Sidebar({
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [tagsOpen, setTagsOpen] = useState(true);
+  const [foldersOpen, setFoldersOpen] = useState(true);
 
   const activeCount = notes.filter((n) => n.status === "active").length;
   const shortCount = notes.filter(
@@ -115,11 +116,24 @@ export default function Sidebar({
 
         <div className="pt-3">
           <div className="flex items-center justify-between px-3 pb-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-              フォルダ
-            </span>
             <button
-              onClick={() => setAdding(true)}
+              onClick={() => setFoldersOpen((v) => !v)}
+              className="flex items-center gap-1 text-neutral-400 transition hover:text-neutral-600 dark:hover:text-neutral-200"
+            >
+              <span className="text-xs font-medium uppercase tracking-wide">
+                フォルダ
+              </span>
+              <IconChevron
+                className={`h-4 w-4 transition-transform ${
+                  foldersOpen ? "" : "-rotate-90"
+                }`}
+              />
+            </button>
+            <button
+              onClick={() => {
+                setFoldersOpen(true);
+                setAdding(true);
+              }}
               className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
               title="フォルダを追加"
             >
@@ -127,28 +141,32 @@ export default function Sidebar({
             </button>
           </div>
 
-          <FolderList
-            view={view}
-            onChangeView={onChangeView}
-            rowClass={rowClass}
-          />
+          {foldersOpen && (
+            <>
+              <FolderList
+                view={view}
+                onChangeView={onChangeView}
+                rowClass={rowClass}
+              />
 
-          {adding && (
-            <input
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onBlur={submitNewFolder}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submitNewFolder();
-                if (e.key === "Escape") {
-                  setNewName("");
-                  setAdding(false);
-                }
-              }}
-              placeholder="フォルダ名"
-              className="mx-1 mt-1 w-[calc(100%-0.5rem)] rounded-xl border border-brand-300 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-800"
-            />
+              {adding && (
+                <input
+                  autoFocus
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onBlur={submitNewFolder}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitNewFolder();
+                    if (e.key === "Escape") {
+                      setNewName("");
+                      setAdding(false);
+                    }
+                  }}
+                  placeholder="フォルダ名"
+                  className="mx-1 mt-1 w-[calc(100%-0.5rem)] rounded-xl border border-brand-300 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-800"
+                />
+              )}
+            </>
           )}
         </div>
 
@@ -186,13 +204,6 @@ export default function Sidebar({
               </p>
             ) : (
               <div className="flex flex-wrap gap-2 px-2 pt-1">
-                {/* すべてのタグ＝タグの絞り込みを解除（すべてのメモへ） */}
-                <button
-                  onClick={() => onChangeView({ type: "all" })}
-                  className={chipClass(view.type === "all")}
-                >
-                  すべてのタグ
-                </button>
                 {tags.map(([tag]) => (
                   <button
                     key={tag}
