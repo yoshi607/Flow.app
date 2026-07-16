@@ -393,33 +393,43 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
     >
-      {/* サイドバー（モバイルはドロワー / md以上は最小化可能 / 全画面時は非表示） */}
+      {/* サイドバー（モバイルはドロワー / md以上は最小化可能 / 全画面時は非表示）
+          ※最小化の幅変化（md:w-64↔md:w-0）は「即時」にしている（transition なし）。
+            幅を連続アニメーションすると右のエディタ幅が毎フレーム変わり、本文が
+            1文字ずつ折り返し直されて見える。幅は1回で確定させ、アニメーションは
+            下の内側ラッパーの transform（translateX）だけで見せる＝リフローしない。 */}
       <div
         ref={sidebarRef}
         style={
           dragX !== null ? { transform: `translateX(${dragX}px)` } : undefined
         }
-        className={`fixed inset-y-0 left-0 z-30 w-64 transform md:static md:translate-x-0 md:transition-[width,opacity] md:duration-300 md:ease-out ${
+        className={`fixed inset-y-0 left-0 z-30 w-64 transform md:static md:translate-x-0 ${
           dragX !== null
             ? "flow-sidebar-drag"
             : sidebarOpen
               ? "flow-sidebar-enter translate-x-0"
               : "flow-sidebar-leave -translate-x-full"
         } ${fullscreen ? "md:hidden" : ""} ${
-          sidebarCollapsed
-            ? "md:w-0 md:overflow-hidden md:opacity-0"
-            : "md:w-64 md:opacity-100"
+          sidebarCollapsed ? "md:w-0" : "md:w-64"
         }`}
       >
-        <Sidebar
-          view={view}
-          onChangeView={changeView}
-          onOpenSettings={() => {
-            setSettingsOpen(true);
-            setSidebarOpen(false);
-          }}
-          onCollapse={() => setSidebarCollapsed(true)}
-        />
+        {/* 内側ラッパー：幅は固定のまま、最小化時は左へスライドさせる（md のみ）。
+            transform はレイアウトを起こさないので本文の再折り返しが発生しない。 */}
+        <div
+          className={`h-full w-64 md:transition-transform md:duration-300 md:ease-out ${
+            sidebarCollapsed ? "md:-translate-x-full" : "md:translate-x-0"
+          }`}
+        >
+          <Sidebar
+            view={view}
+            onChangeView={changeView}
+            onOpenSettings={() => {
+              setSettingsOpen(true);
+              setSidebarOpen(false);
+            }}
+            onCollapse={() => setSidebarCollapsed(true)}
+          />
+        </div>
       </div>
       {/* 背景タップでも閉じる。ドラッグ中は暗さも指の位置に追従させる */}
       {(sidebarOpen || dragX !== null) && (
