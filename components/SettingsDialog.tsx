@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { passwordIssue } from "@/lib/passwordPolicy";
 import { SHORT_NOTE_DAYS, TRASH_RETENTION_DAYS } from "@/lib/types";
 import { IconClose } from "./icons";
 
@@ -14,6 +16,47 @@ export default function SettingsDialog({
 }) {
   const router = useRouter();
   const supabase = createClient();
+
+  // パスワード変更用の状態
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwDone, setPwDone] = useState(false);
+
+  async function handleChangePassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const password = String(form.get("new-password") ?? "");
+    const confirm = String(form.get("confirm-password") ?? "");
+
+    setPwError(null);
+    setPwDone(false);
+
+    const issue = passwordIssue(password);
+    if (issue) {
+      setPwError(issue);
+      return;
+    }
+    if (password !== confirm) {
+      setPwError("確認用パスワードが一致しません。");
+      return;
+    }
+
+    setPwSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setPwDone(true);
+      e.currentTarget.reset();
+      setPwOpen(false);
+    } catch (err: unknown) {
+      setPwError(
+        err instanceof Error ? err.message : "パスワードの変更に失敗しました。",
+      );
+    } finally {
+      setPwSaving(false);
+    }
+  }
 
   // バージョン情報（デプロイのたびに変わる。反映されているかの確認用）
   const commit = process.env.NEXT_PUBLIC_APP_COMMIT ?? "local";
@@ -58,6 +101,73 @@ export default function SettingsDialog({
           <div>
             <div className="text-neutral-400">ログイン中のアカウント</div>
             <div className="font-medium">{userEmail || "（不明）"}</div>
+          </div>
+
+          {/* パスワード変更 */}
+          <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+            <button
+              onClick={() => {
+                setPwOpen((v) => !v);
+                setPwError(null);
+                setPwDone(false);
+              }}
+              className="flex w-full items-center justify-between font-medium"
+            >
+              <span>パスワードを変更</span>
+              <span className="text-neutral-400">{pwOpen ? "−" : "＋"}</span>
+            </button>
+
+            {pwDone && !pwOpen && (
+              <p className="mt-2 text-xs text-green-600 dark:text-green-400">
+                パスワードを変更しました。
+              </p>
+            )}
+
+            {pwOpen && (
+              <form onSubmit={handleChangePassword} className="mt-3 space-y-2">
+                {/* アクセシビリティ・自動入力のためユーザー名欄を隠して置く */}
+                <input
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  defaultValue={userEmail}
+                  className="hidden"
+                  readOnly
+                  aria-hidden
+                />
+                <input
+                  type="password"
+                  name="new-password"
+                  required
+                  minLength={10}
+                  autoComplete="new-password"
+                  placeholder="新しいパスワード（10文字以上）"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-900"
+                />
+                <input
+                  type="password"
+                  name="confirm-password"
+                  required
+                  minLength={10}
+                  autoComplete="new-password"
+                  placeholder="新しいパスワード（確認）"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-900"
+                />
+                <p className="text-xs text-neutral-400">
+                  10文字以上。英小文字・英大文字・数字・記号のうち3種類以上。
+                </p>
+                {pwError && (
+                  <p className="text-xs text-red-600 dark:text-red-400">{pwError}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={pwSaving}
+                  className="w-full rounded-lg bg-brand-500 py-2 font-medium text-white transition hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {pwSaving ? "変更中…" : "パスワードを変更する"}
+                </button>
+              </form>
+            )}
           </div>
 
           <div className="rounded-lg bg-neutral-100 p-3 dark:bg-neutral-800">

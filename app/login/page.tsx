@@ -3,26 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { passwordIssue } from "@/lib/passwordPolicy";
 
 type Mode = "signin" | "signup" | "magic";
-
-// 新規登録時のパスワード強度チェック（クライアント側の第一関門）。
-// ※サーバー側でも Supabase ダッシュボードで「最低文字数」「漏洩パスワード保護
-//   (HaveIBeenPwned)」を有効にすること。ここだけでは迂回されうるため。
-function passwordIssue(pw: string): string | null {
-  if (pw.length < 10) return "パスワードは10文字以上にしてください。";
-  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((r) =>
-    r.test(pw),
-  ).length;
-  if (classes < 3) {
-    return "英小文字・英大文字・数字・記号のうち、3種類以上を含めてください。";
-  }
-  // ありがちな弱いパスワードを軽くはじく
-  if (/^(?:password|passw0rd|12345678|qwerty)/i.test(pw)) {
-    return "推測されやすいパスワードです。別のものにしてください。";
-  }
-  return null;
-}
 
 export default function LoginPage() {
   const router = useRouter();
