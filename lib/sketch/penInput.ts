@@ -165,6 +165,10 @@ export function attachPenInput(
     // 触れているのに筆が始まっていない（up の誤検知・取りこぼし）→
     // ここから筆を再開する。これにより画が途中で切れなくなる。
     if (!drawing || activeId !== e.pointerId) {
+      // 【重要】ここでも UI 判定が要る。ペンでスウォッチをタップすると微小な
+      // 動きで onMove が発火し、スウォッチはキャンバスの上に重なっているため、
+      // insideCanvas だけだと「筆の再開」として点が描かれてしまう。
+      if (overUi(e)) return;
       if (!insideCanvas(e)) return;
       drawing = true;
       activeId = e.pointerId;
