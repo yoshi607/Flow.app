@@ -25,9 +25,11 @@ export default function SettingsDialog({
 
   async function handleChangePassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const password = String(form.get("new-password") ?? "");
-    const confirm = String(form.get("confirm-password") ?? "");
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    const current = String(data.get("current-password") ?? "");
+    const password = String(data.get("new-password") ?? "");
+    const confirm = String(data.get("confirm-password") ?? "");
 
     setPwError(null);
     setPwDone(false);
@@ -41,13 +43,29 @@ export default function SettingsDialog({
       setPwError("確認用パスワードが一致しません。");
       return;
     }
+    if (password === current) {
+      setPwError("現在と異なるパスワードを設定してください。");
+      return;
+    }
 
     setPwSaving(true);
     try {
+      // 現在のパスワードで本人確認する。ログイン済みでも再認証しておくことで、
+      // Supabase の「Secure password change（安全なパスワード変更）」設定が
+      // 有効な場合でも変更できるようにする（＝直近ログインのセッションに更新）。
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: current,
+      });
+      if (reauthError) {
+        setPwError("現在のパスワードが正しくありません。");
+        return;
+      }
+
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setPwDone(true);
-      e.currentTarget.reset();
+      form.reset();
       setPwOpen(false);
     } catch (err: unknown) {
       setPwError(
@@ -134,6 +152,14 @@ export default function SettingsDialog({
                   className="hidden"
                   readOnly
                   aria-hidden
+                />
+                <input
+                  type="password"
+                  name="current-password"
+                  required
+                  autoComplete="current-password"
+                  placeholder="現在のパスワード"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-900"
                 />
                 <input
                   type="password"
