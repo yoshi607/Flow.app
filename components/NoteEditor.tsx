@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import dynamic from "next/dynamic";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -17,6 +24,8 @@ import { Sketch } from "@/lib/tiptap/sketch";
 import { ImageBlock } from "@/lib/tiptap/imageBlock";
 import { compressImage } from "@/lib/images/compress";
 import { downloadNoteAsPng } from "@/lib/exportImage";
+import { useClosingPanel } from "@/lib/useClosingPanel";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import {
   listAttachments,
   deleteAttachment,
@@ -48,6 +57,37 @@ import {
   IconDownload,
 } from "./icons";
 
+// ポップアップメニューの1項目（3点メニュー・クリップメニュー共通の見た目）
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  danger = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      role="menuitem"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-3 whitespace-nowrap px-4 py-2.5 text-left text-sm disabled:opacity-50 ${
+        danger
+          ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+          : "hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
 export default function NoteEditor({
   note,
   onBack,
@@ -78,65 +118,14 @@ export default function NoteEditor({
   } = useNotes();
   const [recording, setRecording] = useState(false);
   const [tagInput, setTagInput] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuClosing, setMenuClosing] = useState(false);
-  // 挿入（写真・音声・手書き）をまとめたクリップメニューの開閉
-  const [insertMenuOpen, setInsertMenuOpen] = useState(false);
-  const [insertMenuClosing, setInsertMenuClosing] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
-  // 書式ツールバーの表示（「Aa」で開閉。既定は畳んでおき上部をすっきりさせる）
-  const [formatOpen, setFormatOpen] = useState(false);
-  const [formatClosing, setFormatClosing] = useState(false);
+  // 右上の3点メニュー／挿入（クリップ）メニュー／書式（Aa）パネル。
+  // いずれも「開くとき flow-format-in・閉じるとき flow-format-out」で動きを揃える
+  const menu = useClosingPanel();
+  const insertMenu = useClosingPanel();
+  const format = useClosingPanel();
   // md 以上（3分割）かどうか。短期バッジの出し分けに使う
-  const [isWide, setIsWide] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const update = () => setIsWide(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  // Aa の開閉。閉じるときはアニメーションを見せてから畳む
-  function toggleFormat() {
-    if (formatOpen && !formatClosing) {
-      setFormatClosing(true);
-      window.setTimeout(() => {
-        setFormatOpen(false);
-        setFormatClosing(false);
-      }, 240); // flow-format-out と同じ長さ
-    } else if (!formatOpen) {
-      setFormatOpen(true);
-    }
-  }
-
-  // 3点メニュー・クリップメニューも Aa と同じく、閉じるときに
-  // 縮んで消えるアニメーション（flow-format-out）を見せてから畳む。
-  function closeMenu() {
-    if (menuClosing) return;
-    setMenuClosing(true);
-    window.setTimeout(() => {
-      setMenuOpen(false);
-      setMenuClosing(false);
-    }, 240);
-  }
-  function toggleMenu() {
-    if (menuOpen && !menuClosing) closeMenu();
-    else if (!menuOpen) setMenuOpen(true);
-  }
-  function closeInsertMenu() {
-    if (insertMenuClosing) return;
-    setInsertMenuClosing(true);
-    window.setTimeout(() => {
-      setInsertMenuOpen(false);
-      setInsertMenuClosing(false);
-    }, 240);
-  }
-  function toggleInsertMenu() {
-    if (insertMenuOpen && !insertMenuClosing) closeInsertMenu();
-    else if (!insertMenuOpen) setInsertMenuOpen(true);
-  }
+  const isWide = useMediaQuery("(min-width: 768px)");
   const { isIPad } = useDevice();
 
   // 削除。一覧・本文それぞれの消えるアニメーションを揃えるため、
@@ -546,14 +535,14 @@ export default function NoteEditor({
           <>
             {/* 書式（Aa）：下の書式ツールバーの表示を切り替える */}
             <button
-              onClick={toggleFormat}
+              onClick={format.toggle}
               className={`flow-press rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-                formatOpen
+                format.open
                   ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
                   : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
               }`}
               title="書式"
-              aria-pressed={formatOpen}
+              aria-pressed={format.open}
             >
               Aa
             </button>
@@ -562,67 +551,57 @@ export default function NoteEditor({
                 押すとメニューがボタンの位置から広がって現れる（Aa と同じ動き）。 */}
             <div className="relative">
               <button
-                onClick={toggleInsertMenu}
+                onClick={insertMenu.toggle}
                 className={`flow-press rounded-full p-2 transition ${
-                  insertMenuOpen
+                  insertMenu.open
                     ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
                     : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
                 }`}
                 title="挿入"
                 aria-haspopup="menu"
-                aria-expanded={insertMenuOpen}
+                aria-expanded={insertMenu.open}
               >
                 <IconClip />
               </button>
-              {insertMenuOpen && (
+              {insertMenu.open && (
                 <>
                   {/* 画面外タップで閉じる */}
-                  <div className="fixed inset-0 z-40" onClick={closeInsertMenu} />
-                  {/* アニメーションと背景色は Aa パネル・3点メニューと揃える。
-                      開くとき flow-format-in、閉じるとき flow-format-out。 */}
+                  <div className="fixed inset-0 z-40" onClick={insertMenu.close} />
+                  {/* アニメーションと背景色は Aa パネル・3点メニューと揃える */}
                   <div
                     role="menu"
                     className={`${
-                      insertMenuClosing ? "flow-format-out" : "flow-format-in"
+                      insertMenu.closing ? "flow-format-out" : "flow-format-in"
                     } absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
                   >
-                    <button
-                      role="menuitem"
+                    <MenuItem
+                      icon={<IconImage className="h-4 w-4 text-neutral-500" />}
+                      label="写真"
+                      disabled={uploading}
                       onClick={() => {
-                        closeInsertMenu();
+                        insertMenu.close();
                         imageInputRef.current?.click();
                       }}
-                      disabled={uploading}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 disabled:opacity-50 dark:hover:bg-neutral-800/70"
-                    >
-                      <IconImage className="h-4 w-4 text-neutral-500" />
-                      写真
-                    </button>
-                    <button
-                      role="menuitem"
+                    />
+                    <MenuItem
+                      icon={<IconMic className="h-4 w-4 text-neutral-500" />}
+                      label="音声メモ"
+                      disabled={recording}
                       onClick={() => {
-                        closeInsertMenu();
+                        insertMenu.close();
                         startRecording();
                       }}
-                      disabled={recording}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 disabled:opacity-40 dark:hover:bg-neutral-800/70"
-                    >
-                      <IconMic className="h-4 w-4 text-neutral-500" />
-                      音声メモ
-                    </button>
+                    />
                     {/* 手書き（①）：iPad のみ。Apple Pencil での描画を想定 */}
                     {isIPad && (
-                      <button
-                        role="menuitem"
+                      <MenuItem
+                        icon={<IconPencil className="h-4 w-4 text-neutral-500" />}
+                        label="手書き"
                         onClick={() => {
-                          closeInsertMenu();
+                          insertMenu.close();
                           insertSketch();
                         }}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
-                      >
-                        <IconPencil className="h-4 w-4 text-neutral-500" />
-                        手書き
-                      </button>
+                      />
                     )}
                   </div>
                 </>
@@ -640,103 +619,92 @@ export default function NoteEditor({
             {/* 右上の3点メニュー（⑤） */}
             <div className="relative">
               <button
-                onClick={toggleMenu}
+                onClick={menu.toggle}
                 className={`flow-press rounded-full p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
-                  menuOpen
+                  menu.open
                     ? "bg-brand-100 text-brand-700 dark:bg-neutral-800"
                     : "text-neutral-500"
                 }`}
                 title="その他"
                 aria-haspopup="menu"
-                aria-expanded={menuOpen}
+                aria-expanded={menu.open}
               >
                 <IconDots />
               </button>
-              {menuOpen && (
+              {menu.open && (
                 <>
                   {/* 画面外タップで閉じる */}
-                  <div className="fixed inset-0 z-40" onClick={closeMenu} />
-                  {/* アニメーションと背景色は Aa パネルと揃える。
-                      開くとき flow-format-in、閉じるとき flow-format-out。 */}
+                  <div className="fixed inset-0 z-40" onClick={menu.close} />
+                  {/* アニメーションと背景色は Aa パネルと揃える */}
                   <div
                     role="menu"
                     className={`${
-                      menuClosing ? "flow-format-out" : "flow-format-in"
+                      menu.closing ? "flow-format-out" : "flow-format-in"
                     } absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
                   >
-                    <button
-                      role="menuitem"
+                    <MenuItem
+                      icon={
+                        <IconPin
+                          filled={note.pinned}
+                          className="h-4 w-4 text-brand-500"
+                        />
+                      }
+                      label={note.pinned ? "ピンを外す" : "メモをピン留め"}
                       onClick={() => {
                         togglePin(note.id);
-                        closeMenu();
+                        menu.close();
                       }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
-                    >
-                      <IconPin filled={note.pinned} className="h-4 w-4 text-brand-500" />
-                      {note.pinned ? "ピンを外す" : "メモをピン留め"}
-                    </button>
+                    />
                     {/* 長期保存にする（⑦）。すでに長期保存のメモでは非表示 */}
                     {note.type === "short" && (
-                      <button
-                        role="menuitem"
+                      <MenuItem
+                        icon={<IconArchive className="h-4 w-4 text-neutral-500" />}
+                        label="長期保存にする"
                         onClick={() => {
                           setNoteType(note.id, "long");
-                          closeMenu();
+                          menu.close();
                         }}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
-                      >
-                        <IconArchive className="h-4 w-4 text-neutral-500" />
-                        長期保存にする
-                      </button>
+                      />
                     )}
                     {onOpenWindow && (
-                      <button
-                        role="menuitem"
+                      <MenuItem
+                        icon={<IconWindow className="h-4 w-4 text-neutral-500" />}
+                        label="別ウィンドウで開く"
                         onClick={() => {
                           onOpenWindow();
-                          closeMenu();
+                          menu.close();
                         }}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
-                      >
-                        <IconWindow className="h-4 w-4 text-neutral-500" />
-                        別ウィンドウで開く
-                      </button>
+                      />
                     )}
-                    <button
-                      role="menuitem"
+                    <MenuItem
+                      icon={<IconMove className="h-4 w-4 text-neutral-500" />}
+                      label="フォルダを変更"
                       onClick={() => {
-                        closeMenu();
+                        menu.close();
                         setFolderPickerOpen(true);
                       }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
-                    >
-                      <IconMove className="h-4 w-4 text-neutral-500" />
-                      フォルダを変更
-                    </button>
-                    <button
-                      role="menuitem"
+                    />
+                    <MenuItem
+                      icon={
+                        <IconDownload className="h-4 w-4 shrink-0 text-neutral-500" />
+                      }
+                      label={exporting ? "書き出し中…" : "画像としてダウンロード"}
+                      disabled={exporting}
                       onClick={() => {
-                        closeMenu();
+                        menu.close();
                         void downloadAsImage();
                       }}
-                      disabled={exporting}
-                      className="flex w-full items-center gap-3 whitespace-nowrap px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 disabled:opacity-50 dark:hover:bg-neutral-800/70"
-                    >
-                      <IconDownload className="h-4 w-4 shrink-0 text-neutral-500" />
-                      {exporting ? "書き出し中…" : "画像としてダウンロード"}
-                    </button>
+                    />
                     <div className="my-1 border-t border-brand-200/60 dark:border-neutral-800" />
-                    <button
-                      role="menuitem"
+                    <MenuItem
+                      icon={<IconTrash className="h-4 w-4" />}
+                      label="削除"
+                      danger
                       onClick={() => {
-                        closeMenu();
+                        menu.close();
                         requestDelete(false);
                       }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
-                    >
-                      <IconTrash className="h-4 w-4" />
-                      削除
-                    </button>
+                    />
                   </div>
                 </>
               )}
@@ -746,10 +714,10 @@ export default function NoteEditor({
 
         {/* 書式（Aa）パネル。本文やタグを押し下げないよう、ヘッダーの下に
             浮かせて表示する（幅は内容ぶんだけ・右寄せ）。Aa の位置から広がる。 */}
-        {formatOpen && (
+        {format.open && (
           <div
             className={`${
-              formatClosing ? "flow-format-out" : "flow-format-in"
+              format.closing ? "flow-format-out" : "flow-format-in"
             } absolute right-2 top-full z-30 mt-1 max-w-[calc(100%-1rem)] rounded-2xl border border-brand-200/60 bg-brand-50 px-2 py-1.5 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
           >
             <RichTextToolbar editor={editor} />

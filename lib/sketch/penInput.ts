@@ -1,8 +1,8 @@
 // Apple Pencil での手書き入力。
 //
 // 【重要】この構成は iPad + Apple Pencil で「文字の2画目が描けない」不具合を
-// 実機ログを取りながら潰した結果で、components/HandwritingCanvas.tsx から
-// そのまま切り出したもの。安易に変えないこと:
+// 実機ログを取りながら潰した結果（旧・全画面手書き HandwritingCanvas から
+// 切り出したもの。元コンポーネントは廃止済み）。安易に変えないこと:
 //  - React の合成イベントではなくネイティブリスナーを使う
 //  - setPointerCapture は使わない
 //  - touchstart/touchmove を preventDefault して Safari のジェスチャー認識を

@@ -97,30 +97,35 @@ export default function FolderList({
     }
   }
 
+  // 名前変更・削除（スワイプ・ダブルクリック・ホバーの削除ボタンで共通）
+  function promptRename(f: Folder) {
+    const name = window.prompt("フォルダ名を変更", f.name);
+    if (name && name.trim()) renameFolder(f.id, name.trim());
+  }
+
+  function confirmDelete(f: Folder) {
+    if (
+      window.confirm(
+        `フォルダ「${f.name}」を削除しますか？\n（中のメモは削除されず、フォルダ未設定になります）`,
+      )
+    )
+      deleteFolder(f.id);
+  }
+
   const actionsFor = (f: Folder): SwipeAction[] => [
     {
       key: "rename",
       label: "名前変更",
       icon: <IconPencil />,
       className: "bg-neutral-500",
-      onClick: () => {
-        const name = window.prompt("フォルダ名を変更", f.name);
-        if (name && name.trim()) renameFolder(f.id, name.trim());
-      },
+      onClick: () => promptRename(f),
     },
     {
       key: "delete",
       label: "削除",
       icon: <IconTrash />,
       className: "bg-red-600",
-      onClick: () => {
-        if (
-          window.confirm(
-            `フォルダ「${f.name}」を削除しますか？\n（中のメモは削除されず、フォルダ未設定になります）`,
-          )
-        )
-          deleteFolder(f.id);
-      },
+      onClick: () => confirmDelete(f),
     },
   ];
 
@@ -172,10 +177,7 @@ export default function FolderList({
                   if (draggingRef.current) return;
                   onChangeView({ type: "folder", folderId: f.id });
                 }}
-                onDoubleClick={() => {
-                  const name = window.prompt("フォルダ名を変更", f.name);
-                  if (name && name.trim()) renameFolder(f.id, name.trim());
-                }}
+                onDoubleClick={() => promptRename(f)}
               >
                 <IconFolder className="h-4 w-4" />
                 <span className="flex-1 truncate">{f.name}</span>
@@ -183,14 +185,7 @@ export default function FolderList({
               </button>
               {/* PC 向け：ホバーで出る削除ボタン（従来どおり） */}
               <button
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `フォルダ「${f.name}」を削除しますか？\n（中のメモは削除されず、フォルダ未設定になります）`,
-                    )
-                  )
-                    deleteFolder(f.id);
-                }}
+                onClick={() => confirmDelete(f)}
                 className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded p-1 text-neutral-400 hover:bg-brand-200 hover:text-red-600 group-hover:block dark:hover:bg-neutral-700"
                 title="フォルダを削除"
               >

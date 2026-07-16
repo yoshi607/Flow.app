@@ -27,8 +27,8 @@ interface NotesContextValue {
   updateNote: (id: string, patch: Partial<Note>, immediate?: boolean) => void;
   setNoteType: (id: string, type: NoteType) => void;
   togglePin: (id: string) => void;
-  trashNote: (id: string) => Promise<void>;
-  restoreNote: (id: string) => Promise<void>;
+  trashNote: (id: string) => void;
+  restoreNote: (id: string) => void;
   deleteNotePermanently: (id: string) => Promise<void>;
   emptyTrash: () => Promise<void>;
   createFolder: (name: string) => Promise<Folder | null>;
@@ -321,30 +321,35 @@ export function NotesProvider({
     [notes, updateNote],
   );
 
+  // ゴミ箱へ移動／復元も updateNote 経由にして保存経路を一本化する
+  // （失敗時の再キュー・オンライン復帰やアプリ非表示時の flush が自動で効く）
   const trashNote = useCallback(
-    async (id: string) => {
-      patchLocal(id, { status: "trashed", trashed_at: new Date().toISOString() });
-      await supabase
-        .from("notes")
-        .update({ status: "trashed", trashed_at: new Date().toISOString() })
-        .eq("id", id);
+    (id: string) => {
+      updateNote(
+        id,
+        { status: "trashed", trashed_at: new Date().toISOString() },
+        true,
+      );
     },
-    [supabase, patchLocal],
+    [updateNote],
   );
 
   const restoreNote = useCallback(
-    async (id: string) => {
+    (id: string) => {
       const note = notes.find((n) => n.id === id);
       // 短期メモを復元するときは期限を今から7日後に再設定
-      const patch: Partial<Note> = {
-        status: "active",
-        trashed_at: null,
-        expires_at: note?.type === "short" ? daysFromNowISO(SHORT_NOTE_DAYS) : null,
-      };
-      patchLocal(id, patch);
-      await supabase.from("notes").update(patch).eq("id", id);
+      updateNote(
+        id,
+        {
+          status: "active",
+          trashed_at: null,
+          expires_at:
+            note?.type === "short" ? daysFromNowISO(SHORT_NOTE_DAYS) : null,
+        },
+        true,
+      );
     },
-    [supabase, notes, patchLocal],
+    [notes, updateNote],
   );
 
   const deleteNotePermanently = useCallback(
