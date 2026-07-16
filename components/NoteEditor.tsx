@@ -77,8 +77,10 @@ export default function NoteEditor({
   const [recording, setRecording] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuClosing, setMenuClosing] = useState(false);
   // 挿入（写真・音声・手書き）をまとめたクリップメニューの開閉
   const [insertMenuOpen, setInsertMenuOpen] = useState(false);
+  const [insertMenuClosing, setInsertMenuClosing] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   // 書式ツールバーの表示（「Aa」で開閉。既定は畳んでおき上部をすっきりさせる）
   const [formatOpen, setFormatOpen] = useState(false);
@@ -105,6 +107,33 @@ export default function NoteEditor({
     } else if (!formatOpen) {
       setFormatOpen(true);
     }
+  }
+
+  // 3点メニュー・クリップメニューも Aa と同じく、閉じるときに
+  // 縮んで消えるアニメーション（flow-format-out）を見せてから畳む。
+  function closeMenu() {
+    if (menuClosing) return;
+    setMenuClosing(true);
+    window.setTimeout(() => {
+      setMenuOpen(false);
+      setMenuClosing(false);
+    }, 240);
+  }
+  function toggleMenu() {
+    if (menuOpen && !menuClosing) closeMenu();
+    else if (!menuOpen) setMenuOpen(true);
+  }
+  function closeInsertMenu() {
+    if (insertMenuClosing) return;
+    setInsertMenuClosing(true);
+    window.setTimeout(() => {
+      setInsertMenuOpen(false);
+      setInsertMenuClosing(false);
+    }, 240);
+  }
+  function toggleInsertMenu() {
+    if (insertMenuOpen && !insertMenuClosing) closeInsertMenu();
+    else if (!insertMenuOpen) setInsertMenuOpen(true);
   }
   const { isIPad } = useDevice();
 
@@ -515,7 +544,7 @@ export default function NoteEditor({
                 押すとメニューがボタンの位置から広がって現れる（Aa と同じ動き）。 */}
             <div className="relative">
               <button
-                onClick={() => setInsertMenuOpen((v) => !v)}
+                onClick={toggleInsertMenu}
                 className={`flow-press rounded-full p-2 transition ${
                   insertMenuOpen
                     ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
@@ -530,19 +559,19 @@ export default function NoteEditor({
               {insertMenuOpen && (
                 <>
                   {/* 画面外タップで閉じる */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setInsertMenuOpen(false)}
-                  />
-                  {/* アニメーションと背景色は Aa パネル・3点メニューと揃える */}
+                  <div className="fixed inset-0 z-40" onClick={closeInsertMenu} />
+                  {/* アニメーションと背景色は Aa パネル・3点メニューと揃える。
+                      開くとき flow-format-in、閉じるとき flow-format-out。 */}
                   <div
                     role="menu"
-                    className="flow-format-in absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800"
+                    className={`${
+                      insertMenuClosing ? "flow-format-out" : "flow-format-in"
+                    } absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
                   >
                     <button
                       role="menuitem"
                       onClick={() => {
-                        setInsertMenuOpen(false);
+                        closeInsertMenu();
                         imageInputRef.current?.click();
                       }}
                       disabled={uploading}
@@ -554,7 +583,7 @@ export default function NoteEditor({
                     <button
                       role="menuitem"
                       onClick={() => {
-                        setInsertMenuOpen(false);
+                        closeInsertMenu();
                         startRecording();
                       }}
                       disabled={recording}
@@ -568,7 +597,7 @@ export default function NoteEditor({
                       <button
                         role="menuitem"
                         onClick={() => {
-                          setInsertMenuOpen(false);
+                          closeInsertMenu();
                           insertSketch();
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
@@ -593,7 +622,7 @@ export default function NoteEditor({
             {/* 右上の3点メニュー（⑤） */}
             <div className="relative">
               <button
-                onClick={() => setMenuOpen((v) => !v)}
+                onClick={toggleMenu}
                 className={`flow-press rounded-full p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
                   menuOpen
                     ? "bg-brand-100 text-brand-700 dark:bg-neutral-800"
@@ -608,20 +637,20 @@ export default function NoteEditor({
               {menuOpen && (
                 <>
                   {/* 画面外タップで閉じる */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setMenuOpen(false)}
-                  />
-                  {/* アニメーションと背景色は Aa パネルと揃える */}
+                  <div className="fixed inset-0 z-40" onClick={closeMenu} />
+                  {/* アニメーションと背景色は Aa パネルと揃える。
+                      開くとき flow-format-in、閉じるとき flow-format-out。 */}
                   <div
                     role="menu"
-                    className="flow-format-in absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800"
+                    className={`${
+                      menuClosing ? "flow-format-out" : "flow-format-in"
+                    } absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
                   >
                     <button
                       role="menuitem"
                       onClick={() => {
                         togglePin(note.id);
-                        setMenuOpen(false);
+                        closeMenu();
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
                     >
@@ -634,7 +663,7 @@ export default function NoteEditor({
                         role="menuitem"
                         onClick={() => {
                           setNoteType(note.id, "long");
-                          setMenuOpen(false);
+                          closeMenu();
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
                       >
@@ -647,7 +676,7 @@ export default function NoteEditor({
                         role="menuitem"
                         onClick={() => {
                           onOpenWindow();
-                          setMenuOpen(false);
+                          closeMenu();
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
                       >
@@ -658,7 +687,7 @@ export default function NoteEditor({
                     <button
                       role="menuitem"
                       onClick={() => {
-                        setMenuOpen(false);
+                        closeMenu();
                         setFolderPickerOpen(true);
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
@@ -670,7 +699,7 @@ export default function NoteEditor({
                     <button
                       role="menuitem"
                       onClick={() => {
-                        setMenuOpen(false);
+                        closeMenu();
                         requestDelete(false);
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"

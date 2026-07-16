@@ -174,7 +174,7 @@ export default function SwipeRow({
                 a.onClick();
               }}
               style={actionStyle(i)}
-              className={`flow-press flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-medium text-white ${a.className}`}
+              className={`flow-press flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.6rem] text-xs font-medium text-white ${a.className}`}
             >
               <span className="h-5 w-5">{a.icon}</span>
               {a.label}
