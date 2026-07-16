@@ -181,11 +181,21 @@ export default function Sidebar({
         </div>
       </nav>
 
-      <div className="safe-bottom border-t border-brand-200/60 p-2 dark:border-neutral-800">
-        <button className={rowClass(false)} onClick={onOpenSettings}>
+      <div className="safe-bottom flex items-center gap-2 border-t border-brand-200/60 p-2 dark:border-neutral-800">
+        <button
+          className={`${rowClass(false)} flex-1`}
+          onClick={onOpenSettings}
+        >
           <IconSettings className="h-4 w-4" />
           <span>設定</span>
         </button>
+        {/* バージョン（デプロイが反映されているかの確認用） */}
+        <span
+          className="shrink-0 pr-1 font-mono text-[10px] text-neutral-400"
+          title={`ビルド: ${process.env.NEXT_PUBLIC_BUILD_TIME ?? "不明"}`}
+        >
+          {process.env.NEXT_PUBLIC_APP_COMMIT ?? "local"}
+        </span>
       </div>
     </div>
   );
