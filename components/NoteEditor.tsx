@@ -18,7 +18,6 @@ import { ImageBlock } from "@/lib/tiptap/imageBlock";
 import { compressImage } from "@/lib/images/compress";
 import {
   listAttachments,
-  uploadAttachment,
   deleteAttachment,
   uploadImage,
 } from "@/lib/attachments";
@@ -31,7 +30,6 @@ import {
   IconBack,
   IconPin,
   IconMic,
-  IconClip,
   IconFile,
   IconTrash,
   IconRestore,
@@ -100,7 +98,6 @@ export default function NoteEditor({
   const supabase = useMemo(() => createClient(), []);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // 録音中に書き込む対象のコールアウトを特定するID
   const sessionRef = useRef<string | null>(null);
@@ -126,22 +123,6 @@ export default function NoteEditor({
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [supabase, note.id]);
-
-  async function handleFilesSelected(e: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
-    if (files.length === 0) return;
-    setUploading(true);
-    for (const file of files) {
-      try {
-        const attachment = await uploadAttachment(supabase, userId, note.id, file);
-        setAttachments((prev) => [...prev, attachment]);
-      } catch (err) {
-        window.alert(err instanceof Error ? err.message : "添付に失敗しました");
-      }
-    }
-    setUploading(false);
-  }
 
 
   async function handleDeleteAttachment(attachment: Attachment) {
@@ -464,21 +445,6 @@ export default function NoteEditor({
                 {isFullscreen ? <IconCompress /> : <IconExpand />}
               </button>
             )}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="rounded-lg p-2 text-neutral-500 hover:bg-brand-100 disabled:opacity-50 dark:hover:bg-neutral-800"
-              title="ファイル・写真を添付"
-            >
-              <IconClip />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={handleFilesSelected}
-            />
             {/* 画像を本文に埋め込む（小さく表示・タップで拡大） */}
             <button
               onClick={() => imageInputRef.current?.click()}
