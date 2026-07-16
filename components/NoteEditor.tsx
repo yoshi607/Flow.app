@@ -76,6 +76,8 @@ export default function NoteEditor({
   const [tagInput, setTagInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  // 書式ツールバーの表示（「Aa」で開閉。既定は畳んでおき上部をすっきりさせる）
+  const [formatOpen, setFormatOpen] = useState(false);
   const { isIPad } = useDevice();
 
   // 削除。一覧・本文それぞれの消えるアニメーションを揃えるため、
@@ -424,7 +426,7 @@ export default function NoteEditor({
       >
         <button
           onClick={onBack}
-          className={`flow-press rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
+          className={`flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
             standalone ? "" : "md:hidden"
           }`}
           title={standalone ? "閉じる" : "戻る"}
@@ -436,24 +438,49 @@ export default function NoteEditor({
 
         {!trashed && (
           <>
-            {onToggleFullscreen && (
-              <button
-                onClick={onToggleFullscreen}
-                className="hidden rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 md:block"
-                title={isFullscreen ? "全画面を解除" : "全画面表示"}
-              >
-                {isFullscreen ? <IconCompress /> : <IconExpand />}
-              </button>
-            )}
-            {/* 画像を本文に埋め込む（小さく表示・タップで拡大） */}
+            {/* 書式（Aa）：下の書式ツールバーの表示を切り替える */}
             <button
-              onClick={() => imageInputRef.current?.click()}
-              disabled={uploading}
-              className="rounded-lg p-2 text-neutral-500 hover:bg-brand-100 disabled:opacity-50 dark:hover:bg-neutral-800"
-              title="写真を本文に挿入"
+              onClick={() => setFormatOpen((v) => !v)}
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+                formatOpen
+                  ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
+                  : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+              }`}
+              title="書式"
+              aria-pressed={formatOpen}
             >
-              <IconImage />
+              Aa
             </button>
+
+            {/* 挿入（画像・音声・手書き）を1つのピルにまとめる */}
+            <div className="flex items-center gap-0.5 rounded-full bg-brand-100/70 p-0.5 dark:bg-neutral-800/70">
+              <button
+                onClick={() => imageInputRef.current?.click()}
+                disabled={uploading}
+                className="flow-press rounded-full p-1.5 text-neutral-600 hover:bg-brand-200/70 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                title="写真を本文に挿入"
+              >
+                <IconImage />
+              </button>
+              <button
+                onClick={startRecording}
+                disabled={recording}
+                className="flow-press rounded-full p-1.5 text-neutral-600 hover:bg-brand-200/70 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                title="音声メモ"
+              >
+                <IconMic />
+              </button>
+              {/* 手書き（①）：iPad のみ表示。Apple Pencil での描画を想定 */}
+              {isIPad && (
+                <button
+                  onClick={insertSketch}
+                  className="flow-press rounded-full p-1.5 text-neutral-600 hover:bg-brand-200/70 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                  title="手書き"
+                >
+                  <IconPencil />
+                </button>
+              )}
+            </div>
             <input
               ref={imageInputRef}
               type="file"
@@ -462,22 +489,15 @@ export default function NoteEditor({
               className="hidden"
               onChange={handleImageSelected}
             />
-            <button
-              onClick={startRecording}
-              disabled={recording}
-              className="flow-press rounded-lg p-2 text-neutral-500 hover:bg-brand-100 disabled:opacity-40 dark:hover:bg-neutral-800"
-              title="音声メモ"
-            >
-              <IconMic />
-            </button>
-            {/* 手書き（①）：iPad のみ表示。Apple Pencil での描画を想定 */}
-            {isIPad && (
+
+            {/* 全画面（md 以上のみ） */}
+            {onToggleFullscreen && (
               <button
-                onClick={insertSketch}
-                className="flow-press rounded-lg p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
-                title="手書き"
+                onClick={onToggleFullscreen}
+                className="hidden rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 md:block"
+                title={isFullscreen ? "全画面を解除" : "全画面表示"}
               >
-                <IconPencil />
+                {isFullscreen ? <IconCompress /> : <IconExpand />}
               </button>
             )}
 
@@ -485,7 +505,7 @@ export default function NoteEditor({
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className={`flow-press rounded-lg p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
+                className={`flow-press rounded-full p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
                   menuOpen
                     ? "bg-brand-100 text-brand-700 dark:bg-neutral-800"
                     : "text-neutral-500"
@@ -614,8 +634,9 @@ export default function NoteEditor({
             完全に削除
           </button>
         </div>
-      ) : (
-        // 書式ツールバー行（短期/長期トグルは廃止し、3点メニューへ移動 ⑦）
+      ) : formatOpen || note.type === "short" ? (
+        // 書式ツールバー行。「Aa」を押したときだけ書式ツールを出す。
+        // 短期メモのバッジは（Aa が閉じていても）常に見せる。
         <div className="flex flex-wrap items-center gap-3 border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
           {note.type === "short" &&
             (() => {
@@ -627,9 +648,9 @@ export default function NoteEditor({
               ) : null;
             })()}
           <div className="flex-1" />
-          <RichTextToolbar editor={editor} />
+          {formatOpen && <RichTextToolbar editor={editor} />}
         </div>
-      )}
+      ) : null}
 
       {/* タグ */}
       {!trashed && (
