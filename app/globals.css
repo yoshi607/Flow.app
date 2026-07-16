@@ -108,6 +108,16 @@ body {
   content: none;
 }
 
+/* ===== 本文中の画像ブロック ===== */
+.ProseMirror div[data-type="image"] {
+  @apply my-3;
+}
+/* 中身を持たない atom なので、プレースホルダーの疑似要素が漏れないようにする */
+.ProseMirror div[data-type="image"]::before,
+.ProseMirror div[data-type="image"]::after {
+  content: none;
+}
+
 .ProseMirror p.is-editor-empty:first-child::before,
 .ProseMirror .is-empty::before {
   content: attr(data-placeholder);

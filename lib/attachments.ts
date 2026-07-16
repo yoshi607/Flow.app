@@ -75,6 +75,33 @@ export async function uploadAttachment(
   return data as Attachment;
 }
 
+// 本文に埋め込む画像を Storage に上げ、公開URLを返す。
+// uploadAttachment と違い attachments 行は作らない（本文が参照元。添付ストリップに
+// 重複表示させないため）。実体は圧縮済みを渡す前提。
+export async function uploadImage(
+  supabase: SupabaseClient,
+  userId: string,
+  noteId: string,
+  blob: Blob,
+  ext: string,
+): Promise<{ url: string; path: string }> {
+  if (blob.size > MAX_FILE_SIZE) {
+    throw new Error("画像が大きすぎます（20MBを超えています）。");
+  }
+  const safeExt = /^\.[A-Za-z0-9]+$/.test(ext) ? ext : ".img";
+  const path = `${userId}/${noteId}/${crypto.randomUUID()}-image${safeExt}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, blob, { contentType: blob.type || undefined });
+  if (uploadError) {
+    throw new Error(`画像のアップロードに失敗しました: ${uploadError.message}`);
+  }
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, path };
+}
+
 export async function deleteAttachment(
   supabase: SupabaseClient,
   attachment: Attachment,

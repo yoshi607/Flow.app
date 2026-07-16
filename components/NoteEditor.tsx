@@ -14,7 +14,14 @@ import { shortNoteRemainingDays, trashRemainingDays, formatFileSize, shareNote }
 import { toEditorHtml, toAppendedParagraphs } from "@/lib/richtext";
 import { TranscriptCallout } from "@/lib/tiptap/transcriptCallout";
 import { Sketch } from "@/lib/tiptap/sketch";
-import { listAttachments, uploadAttachment, deleteAttachment } from "@/lib/attachments";
+import { ImageBlock } from "@/lib/tiptap/imageBlock";
+import { compressImage } from "@/lib/images/compress";
+import {
+  listAttachments,
+  uploadAttachment,
+  deleteAttachment,
+  uploadImage,
+} from "@/lib/attachments";
 import RichTextToolbar from "./RichTextToolbar";
 import FolderPickerSheet from "./FolderPickerSheet";
 
@@ -35,6 +42,7 @@ import {
   IconDots,
   IconMove,
   IconPencil,
+  IconImage,
   IconArchive,
 } from "./icons";
 
@@ -93,6 +101,7 @@ export default function NoteEditor({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   // 録音中に書き込む対象のコールアウトを特定するID
   const sessionRef = useRef<string | null>(null);
 
@@ -165,6 +174,7 @@ export default function NoteEditor({
       // 描画中は editor.setEditable(false) でエディタごと編集不可にするため、
       // ブロック側は editor.isEditable ではなくこの値で判定する
       Sketch.configure({ editable: !trashed }),
+      ImageBlock,
       TextStyle,
       Color,
       Placeholder.configure({
@@ -177,11 +187,61 @@ export default function NoteEditor({
         class:
           "thin-scroll flex-1 overflow-y-auto px-4 py-3 leading-relaxed outline-none",
       },
+      // 画像の貼り付け（PC）。画像が含まれていたら取り込む
+      handlePaste: (_view, event) => {
+        const files = imageFilesFrom(event.clipboardData);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        void insertImages(files);
+        return true;
+      },
+      // 画像のドラッグ&ドロップ（PC）
+      handleDrop: (_view, event) => {
+        const files = imageFilesFrom(
+          (event as DragEvent).dataTransfer,
+        );
+        if (files.length === 0) return false;
+        event.preventDefault();
+        void insertImages(files);
+        return true;
+      },
     },
     onUpdate: ({ editor }) => {
       updateNote(note.id, { body: editor.getHTML() });
     },
   });
+
+  // リモート（他端末）での本文変更を、開いたままのエディタへ流し込む。
+  // 単一ユーザーの複数端末を想定した軽量同期（last-writer-wins）。
+  useEffect(() => {
+    if (!editor) return;
+    // 手書きの描画モード中はエディタごと編集不可。巻き込まないよう触らない
+    if (!editor.isEditable) return;
+    // この端末で入力中なら上書きしない（操作している端末が勝つ）
+    if (editor.isFocused) return;
+    const incoming = toEditorHtml(note.body);
+    // 変化なし／自分の入力のエコーなら何もしない
+    if (incoming === editor.getHTML()) return;
+    // emitUpdate:false で onUpdate を発火させない（保存のエコーループを防ぐ）
+    editor.commands.setContent(incoming, { emitUpdate: false });
+    // note.body の変化だけに反応させる（editor は同一インスタンス）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.body]);
+
+  // フォーカス中に来て見送ったリモート変更を、離した瞬間に取り込む
+  useEffect(() => {
+    if (!editor) return;
+    const onBlur = () => {
+      if (!editor.isEditable) return;
+      const incoming = toEditorHtml(note.body);
+      if (incoming === editor.getHTML()) return;
+      editor.commands.setContent(incoming, { emitUpdate: false });
+    };
+    editor.on("blur", onBlur);
+    return () => {
+      editor.off("blur", onBlur);
+    };
+  }, [editor, note.body]);
 
   // 手書き（①）：カーソル位置に手書きブロックを挿入する。
   // 基準幅(w)は 0 のままにしておき、ブロック自身が最初に測れた幅を入れる
@@ -204,6 +264,50 @@ export default function NoteEditor({
         { type: "paragraph" },
       ])
       .run();
+  }
+
+  // DataTransfer / ClipboardData から画像ファイルだけ取り出す
+  function imageFilesFrom(dt: DataTransfer | null): File[] {
+    if (!dt) return [];
+    return Array.from(dt.files ?? []).filter((f) => f.type.startsWith("image/"));
+  }
+
+  // 画像を圧縮してアップロードし、本文のカーソル位置に挿入する。
+  // 本文には URL だけを入れる（base64にしない）。
+  async function insertImages(files: File[]) {
+    if (!editor || files.length === 0) return;
+    setUploading(true);
+    for (const file of files) {
+      try {
+        const img = await compressImage(file);
+        const { url } = await uploadImage(
+          supabase,
+          userId,
+          note.id,
+          img.blob,
+          img.ext,
+        );
+        editor
+          .chain()
+          .focus()
+          .insertContent([
+            { type: "imageBlock", attrs: { src: url, w: img.width, h: img.height } },
+            { type: "paragraph" },
+          ])
+          .run();
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "画像の挿入に失敗しました");
+      }
+    }
+    setUploading(false);
+  }
+
+  async function handleImageSelected(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+    e.target.value = "";
+    await insertImages(files);
   }
 
   // 録音開始：文字起こし用のコールアウトを本文末尾に置き、そこへ書き込んでいく
@@ -374,6 +478,23 @@ export default function NoteEditor({
               multiple
               className="hidden"
               onChange={handleFilesSelected}
+            />
+            {/* 画像を本文に埋め込む（小さく表示・タップで拡大） */}
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              disabled={uploading}
+              className="rounded-lg p-2 text-neutral-500 hover:bg-brand-100 disabled:opacity-50 dark:hover:bg-neutral-800"
+              title="写真を本文に挿入"
+            >
+              <IconImage />
+            </button>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleImageSelected}
             />
             <button
               onClick={startRecording}
