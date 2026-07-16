@@ -63,7 +63,7 @@ export default function Sidebar({
   const isActive = (v: View) => JSON.stringify(v) === JSON.stringify(view);
 
   const rowClass = (active: boolean) =>
-    `flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-sm text-left transition ${
+    `flex items-center gap-2.5 w-full px-3 py-2 rounded-2xl text-sm text-left transition ${
       active
         ? "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200"
         : "hover:bg-brand-100/70 dark:hover:bg-neutral-800/60"

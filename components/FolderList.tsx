@@ -155,7 +155,13 @@ export default function FolderList({
           onPointerCancel={endDrag}
           className={dragId === f.id ? "flow-reorder-dragging relative z-10" : ""}
         >
-          <SwipeRow actions={actionsFor(f)} disabled={dragId === f.id}>
+          {/* 前面の地色はサイドバーに合わせる。既定の白のままだと、
+              選択ハイライトの丸角のまわりに白い四角が見えてしまう */}
+          <SwipeRow
+            actions={actionsFor(f)}
+            disabled={dragId === f.id}
+            contentClassName="rounded-2xl bg-brand-50 dark:bg-neutral-900"
+          >
             <div className="group relative">
               <button
                 className={rowClass(

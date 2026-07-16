@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -8,17 +8,26 @@ type Mode = "signin" | "signup" | "magic";
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = createClient();
+  // 毎回の再描画で作り直さない（作り直すと認証リスナーが増えてしまう）
+  const supabase = useMemo(() => createClient(), []);
 
   const [mode, setMode] = useState<Mode>("signin");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  // 【重要】メール/パスワードは state で持たない（非制御入力にする）。
+  // state に持つと、iOS の自動入力（iCloudキーチェーン）が React の
+  // onChange を伴わずに DOM の値だけを埋めることがあり、その後の再描画で
+  // React が空の state を DOM に書き戻して入力が消える。
+  // （「打った後に消えて打ち直しになる時がある」の原因）
+  // 送信時にフォームから直接読めば、この取りこぼしが起きない。
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const email = String(form.get("email") ?? "").trim();
+    const password = String(form.get("password") ?? "");
+
     setLoading(true);
     setError(null);
     setMessage(null);
@@ -63,10 +72,18 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🪶</div>
+          {/* アプリのアイコン（ホーム画面・PWA と同じもの） */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icons/icon-192.png"
+            alt="Flow"
+            width={80}
+            height={80}
+            className="mx-auto mb-3 h-20 w-20 rounded-2xl shadow-sm"
+          />
           <h1 className="text-3xl font-semibold tracking-tight">Flow</h1>
           <p className="text-sm text-neutral-500 mt-1">
-            iPhone / iPad / Windows で同期
+            思いついた瞬間が、いちばんのメモ帳。
           </p>
         </div>
 
@@ -100,20 +117,20 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
             type="email"
+            name="email"
             required
+            autoComplete="username"
             placeholder="メールアドレス"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
             className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
           />
           {mode !== "magic" && (
             <input
               type="password"
+              name="password"
               required
               minLength={6}
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
               placeholder="パスワード（6文字以上）"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
             />
           )}

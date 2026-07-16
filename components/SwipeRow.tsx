@@ -33,11 +33,15 @@ export default function SwipeRow({
   children,
   disabled = false,
   className = "",
+  // スワイプで動く前面の背景。背後のアクションを隠すため不透明である必要がある。
+  // 置かれる場所の地色に合わせて差し替える（既定は本文一覧の白）。
+  contentClassName = "bg-white dark:bg-neutral-950",
 }: {
   actions: SwipeAction[];
   children: ReactNode;
   disabled?: boolean;
   className?: string;
+  contentClassName?: string;
 }) {
   const { isTouch } = useDevice();
   const [offset, setOffset] = useState(0); // 現在の表示ずらし量(px, 0以下)
@@ -185,7 +189,7 @@ export default function SwipeRow({
 
       {/* 前面のコンテンツ */}
       <div
-        className={`flow-swipe-content relative bg-white dark:bg-neutral-950 ${
+        className={`flow-swipe-content relative ${contentClassName} ${
           dragging ? "dragging" : ""
         }`}
         style={{ transform: `translateX(${offset}px)` }}
