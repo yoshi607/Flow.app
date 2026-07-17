@@ -144,16 +144,12 @@ export default function SwipeRow({
   // スワイプの開き具合（0〜1）。これに応じてアクションを小→大に見せる。
   const revealRatio = openWidth > 0 ? Math.min(1, Math.abs(offset) / openWidth) : 0;
 
-  // 各ボタンを「順番に・小さい状態から」現れさせる。
-  // スワイプで先に露出する右端（削除）から一つずつ立ち上がるよう、
-  // ボタンごとに開始しきい値をずらす（stagger）。
-  const STAGGER = 0.18; // 隣のボタンとの出だしのズレ
-  const RAMP = 0.5; // 1つのボタンが小→大になりきるまでの幅
-  const actionStyle = (index: number) => {
-    // 右端（配列の末尾）を order=0 とし、そこから順に現れる
-    const order = actions.length - 1 - index;
-    const start = order * STAGGER;
-    const p = Math.max(0, Math.min(1, (revealRatio - start) / RAMP));
+  // 各ボタンを「小さい状態から」スワイプ量に応じて現れさせる。
+  // 以前は右端（削除）から順に開始をずらしていた（stagger）が、共有・移動も
+  // 削除とまったく同じタイミング・同じ度合いで出るよう、ずらしは行わない。
+  const RAMP = 0.5; // ボタンが小→大になりきるまでの幅（スワイプ割合）
+  const actionStyle = () => {
+    const p = Math.max(0, Math.min(1, revealRatio / RAMP));
     return {
       transform: `scale(${0.2 + 0.8 * p})`,
       opacity: p,
@@ -170,14 +166,14 @@ export default function SwipeRow({
     >
       {/* 背後のアクション（丸みのある四角ボタン）。スワイプ量に応じて拡大する */}
       <div className="absolute inset-y-0 right-0 flex">
-        {actions.map((a, i) => (
+        {actions.map((a) => (
           <div key={a.key} style={{ width: ACTION_WIDTH }} className="flex p-1">
             <button
               onClick={() => {
                 if (!a.keepOpen) close();
                 a.onClick();
               }}
-              style={actionStyle(i)}
+              style={actionStyle()}
               className={`flow-press flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.6rem] text-xs font-medium text-white ${a.className}`}
             >
               <span className="h-5 w-5">{a.icon}</span>
