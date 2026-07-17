@@ -96,6 +96,14 @@
     "href": "/splash/apple-splash-1136x640.png"
   },
   {
+    "media": "(device-width: 970px) and (device-height: 1408px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
+    "href": "/splash/apple-splash-1940x2816.png"
+  },
+  {
+    "media": "(device-width: 970px) and (device-height: 1408px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)",
+    "href": "/splash/apple-splash-2816x1940.png"
+  },
+  {
     "media": "(device-width: 834px) and (device-height: 1210px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
     "href": "/splash/apple-splash-1668x2420.png"
   },
