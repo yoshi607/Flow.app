@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>導入アニメ 切り分けテスト</title>
+<!--
+  切り分け用の静的ページ（一時的なもの）。
+  React も Next.js も JavaScript も一切使わず、SplashIntro と同じ SVG/SMIL だけを置いている。
+
+  ここで「2回」再生されるなら → WebKit(iOS) 側の挙動。アプリは無関係。
+  ここで「1回」なら        → アプリ(React/ハイドレーション)側が要素を作り直している。
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; }
+  .stage {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    pointer-events: none;
+  }
+  .bg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .arrow { position: relative; width: min(46vmin, 220px); height: min(46vmin, 220px); }
+  .note {
+    position: fixed; left: 0; right: 0; bottom: 24px; text-align: center;
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+    color: #333;
+  }
+  .btn {
+    display: inline-block; margin-top: 8px; padding: 10px 18px; border-radius: 10px;
+    background: #4a90d9; color: #fff; text-decoration: none; pointer-events: auto;
+  }
+</style>
+</head>
+<body>
+
+<div class="note">
+  アニメが何回再生されたか数えてください。<br />
+  <a class="btn" href="/intro-test.html">もう一度（再読み込み）</a>
+</div>
+
+<div class="stage" aria-hidden="true">
+  <!-- 背景（単色なので引き伸ばして全画面を覆う） -->
+  <svg class="bg" viewBox="0 0 1 1" preserveAspectRatio="none">
+    <rect width="1" height="1" fill="#dceef8">
+      <animate attributeName="opacity" values="1;1;0" keyTimes="0;0.78;1" dur="1.6s" fill="freeze" />
+    </rect>
+  </svg>
+
+  <svg class="arrow" viewBox="0 0 100 100">
+    <path
+      d="M 20.5 77 C 24 71.5, 27 66, 30 60.5 C 33 55, 34.5 50.5, 37 46 C 40 41.5, 43.5 37.5, 46.5 40.5 C 49.3 43.3, 50.3 55.5, 52.8 61 C 54.8 64.5, 57.5 63, 60 57 C 62.5 51, 65.5 46, 69 40.5 C 70.5 38, 71.8 36.3, 73 35"
+      pathLength="1" fill="none" stroke="#fff" stroke-width="10"
+      stroke-linecap="round" stroke-linejoin="round"
+      stroke-dasharray="1" stroke-dashoffset="1">
+      <animate attributeName="stroke-dashoffset"
+        values="1;0;0;-1" keyTimes="0;0.48;0.58;1"
+        calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1;0.55 0 0.35 1"
+        dur="1.25s" begin="0.06s" fill="freeze" />
+    </path>
+
+    <path d="M 61 30 L 79.5 20.5 L 82 42 Z" fill="#fff" stroke="#fff"
+          stroke-width="4" stroke-linejoin="round" opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0"
+        keyTimes="0;0.40;0.54;0.72;1" dur="1.25s" begin="0.06s" fill="freeze" />
+      <animateTransform attributeName="transform" type="translate"
+        values="0 0;0 0;14 -14" keyTimes="0;0.72;1"
+        calcMode="spline" keySplines="0 0 1 1;0.55 0 0.35 1"
+        dur="1.25s" begin="0.06s" fill="freeze" />
+    </path>
+  </svg>
+</div>
+
+</body>
+</html>
