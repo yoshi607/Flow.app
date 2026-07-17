@@ -110,22 +110,43 @@ export default function SettingsDialog({
     dpr: number;
     viewport: string;
     standalone: boolean;
-    matched: string | null;
+    orientation: string;
+    deviceMq: string;
+    matched: string[];
   } | null>(null);
 
   useEffect(() => {
-    const matched =
-      splashScreens.find((s) => window.matchMedia(s.media).matches) ?? null;
-    setDeviceInfo({
-      screen: `${window.screen.width}x${window.screen.height}`,
-      dpr: window.devicePixelRatio,
-      viewport: `${window.innerWidth}x${window.innerHeight}`,
-      standalone:
-        window.matchMedia("(display-mode: standalone)").matches ||
-        // iOS Safari 独自
-        (window.navigator as unknown as { standalone?: boolean }).standalone === true,
-      matched: matched?.href ?? null,
-    });
+    function measure() {
+      const w = window.screen.width;
+      const h = window.screen.height;
+      const mm = (q: string) => window.matchMedia(q).matches;
+
+      // 横向き時に device-width/height が入れ替わるかを実測する。
+      // （iOS の起動画像はこの値で選ばれるため、入れ替わるなら横向き用の
+      //   メディアクエリも入れ替えた寸法で書く必要がある）
+      const dw = mm(`(device-width: ${w}px)`) ? w : mm(`(device-width: ${h}px)`) ? h : 0;
+      const dh = mm(`(device-height: ${h}px)`) ? h : mm(`(device-height: ${w}px)`) ? w : 0;
+
+      setDeviceInfo({
+        screen: `${w}x${h}`,
+        dpr: window.devicePixelRatio,
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        standalone:
+          mm("(display-mode: standalone)") ||
+          // iOS Safari 独自
+          (window.navigator as unknown as { standalone?: boolean }).standalone === true,
+        orientation: mm("(orientation: landscape)") ? "landscape" : "portrait",
+        deviceMq: `${dw || "?"}x${dh || "?"}`,
+        // 一致するものを全部出す（複数一致していると iOS がどれを選ぶかで化ける）
+        matched: splashScreens
+          .filter((s) => mm(s.media))
+          .map((s) => s.href.replace("/splash/apple-splash-", "").replace(".png", "")),
+      });
+    }
+    measure();
+    // 回転しても開いたまま追従させる
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
   return (
@@ -259,9 +280,13 @@ export default function SettingsDialog({
             <div className="rounded-lg bg-neutral-100 p-2 font-mono text-[10px] leading-relaxed text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
               <div>screen: {deviceInfo.screen} @{deviceInfo.dpr}x</div>
               <div>viewport: {deviceInfo.viewport}</div>
+              <div>orientation: {deviceInfo.orientation}</div>
+              <div>device-mq: {deviceInfo.deviceMq}</div>
               <div>standalone: {String(deviceInfo.standalone)}</div>
-              <div className={deviceInfo.matched ? "" : "text-red-500"}>
-                splash: {deviceInfo.matched ?? "一致なし"}
+              <div
+                className={deviceInfo.matched.length === 0 ? "text-red-500" : ""}
+              >
+                splash: {deviceInfo.matched.join(" , ") || "一致なし"}
               </div>
             </div>
           )}
