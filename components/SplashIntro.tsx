@@ -9,13 +9,15 @@
 // 【動きは SMIL（SVG 組み込み）で書く】CSS アニメーションではなく SMIL なのは、
 // スタイルシートの再適用に左右されず、JS も要らないため。
 //
-// 【「抜け」は動きだけで見せる】以前は抜けも描画と同じ「波が左下→右上へ走る」
-// 動きにしていたが、描画と見分けがつかず「同じアニメが2回」に見えてしまった
-// （計測の結果、発火は1回で技術的な二重再生ではなく見え方の問題だった）。
-// そこで
+// 【「抜け」は矢印ごと飛ばす】抜けを線の dashoffset で行うと、白く見える部分が
+// 描画中と同じく「左下→右上へ動く」ため、描画と見分けがつかず「同じアニメの
+// 繰り返し」に見えてしまう（発火は1回であることを計測で確認済み。技術的な
+// 二重再生ではなく見え方の問題）。dashoffset を 0→-1 にする方式では白い帯が
+// 半分の長さで もう一度 右へ走るため「1回半」に見えていた。
+// そこで抜けは dashoffset を触らず、
 //   - 形になったあとに「ため」を置く（0.4秒）
-//   - 抜けはフェードを使わず、矢じりは画面外へ飛ばし、線は波を引き上げて流す
-// として、描画とは別の動作だと分かるようにしている。
+//   - 線と矢じりを1つのグループにまとめ、右上へ加速させて viewBox の外へ出す
+// とした。「伸びる」と「完成した矢印が丸ごと滑り出る」は別の動作として読める。
 //
 // 【当たり判定を持たない】オーバーレイは pointer-events:none。最後に消え損ねても
 // 操作を邪魔しない（消えるのに JS を待たない設計の保険）。
@@ -39,9 +41,12 @@ const DUR = "1.4s";
 // 区切り（DUR に対する割合）
 //   0    →0.44 描画（尾から先端へ引かれる）
 //   0.44 →0.73 ため（約0.4秒。ここで Flow アイコンの形で静止する）
-//   0.73 →1    抜け（波が流れ出て、矢じりは画面外へ）
+//   0.73 →1    抜け（矢印ごと右上へ加速して画面外へ）
 const T_DRAWN = 0.44;
 const T_HOLD = 0.73;
+
+/** 抜けの移動量。矢印の進行方向（右上45°）へ、viewBox(100)を確実に出きる距離 */
+const EXIT = "125 -125";
 
 export default function SplashIntro() {
   return (
@@ -60,57 +65,15 @@ export default function SplashIntro() {
         </rect>
       </svg>
 
-      {/* viewBox の外は描画されないので、矢じりは飛ばすだけで消える（フェード不要） */}
+      {/* viewBox の外は描画されないので、矢印は飛ばすだけで消える（フェード不要） */}
       <svg className="flow-intro-svg" viewBox="0 0 100 100">
-        {/* 線：pathLength=1 に対し dash=1/gap=1。dashoffset を
-              1 → 0 : 尾から先端へ引かれる（現れる）
-              0 → -1: 尾の側から引き上げられ先端から流れ出る（消える）
-            透明度は一切変えず、動きだけで出入りさせる */}
-        <path
-          d={LINE}
-          pathLength={1}
-          fill="none"
-          stroke="#fff"
-          strokeWidth={10}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray={1}
-          strokeDashoffset={1}
-        >
-          <animate
-            attributeName="stroke-dashoffset"
-            values={`1;0;0;-1`}
-            keyTimes={`0;${T_DRAWN};${T_HOLD};1`}
-            calcMode="spline"
-            keySplines="0.65 0 0.35 1;0 0 1 1;0.55 0 1 0.45"
-            dur={DUR}
-            begin={BEGIN}
-            fill="freeze"
-          />
-        </path>
-
-        {/* 矢じり：線が届く頃に現れ、ためのあと右上へ飛んで画面外へ出る。
-            フェードアウトはしない（動きだけで抜ける） */}
-        <path
-          d={HEAD}
-          fill="#fff"
-          stroke="#fff"
-          strokeWidth={4}
-          strokeLinejoin="round"
-          opacity={0}
-        >
-          <animate
-            attributeName="opacity"
-            values="0;0;1;1"
-            keyTimes="0;0.36;0.46;1"
-            dur={DUR}
-            begin={BEGIN}
-            fill="freeze"
-          />
+        {/* 抜け：完成した矢印を線ごと右上へ加速させ、viewBox の外へ出す。
+            ここでだけ動かすので、描画（線が伸びる）とは別の動作として読める */}
+        <g>
           <animateTransform
             attributeName="transform"
             type="translate"
-            values={`0 0;0 0;44 -44`}
+            values={`0 0;0 0;${EXIT}`}
             keyTimes={`0;${T_HOLD};1`}
             calcMode="spline"
             keySplines="0 0 1 1;0.55 0 1 0.45"
@@ -118,7 +81,51 @@ export default function SplashIntro() {
             begin={BEGIN}
             fill="freeze"
           />
-        </path>
+
+          {/* 線：pathLength=1 に対し dash=1/gap=1。dashoffset 1→0 で
+              尾から先端へ引かれる。描き終わったら 0 のまま固定し、以降は
+              上の平行移動だけで抜ける（ここを動かすと「もう一度描いた」ように見える） */}
+          <path
+            d={LINE}
+            pathLength={1}
+            fill="none"
+            stroke="#fff"
+            strokeWidth={10}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={1}
+            strokeDashoffset={1}
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              values="1;0"
+              calcMode="spline"
+              keySplines="0.65 0 0.35 1"
+              dur={`${(parseFloat(DUR) * T_DRAWN).toFixed(3)}s`}
+              begin={BEGIN}
+              fill="freeze"
+            />
+          </path>
+
+          {/* 矢じり：線が届く頃に現れる。移動はグループ側に任せる */}
+          <path
+            d={HEAD}
+            fill="#fff"
+            stroke="#fff"
+            strokeWidth={4}
+            strokeLinejoin="round"
+            opacity={0}
+          >
+            <animate
+              attributeName="opacity"
+              values="0;0;1;1"
+              keyTimes="0;0.36;0.46;1"
+              dur={DUR}
+              begin={BEGIN}
+              fill="freeze"
+            />
+          </path>
+        </g>
       </svg>
     </div>
   );
