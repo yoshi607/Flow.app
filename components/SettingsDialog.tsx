@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { passwordIssue } from "@/lib/passwordPolicy";
 import { SHORT_NOTE_DAYS, TRASH_RETENTION_DAYS } from "@/lib/types";
+import splashScreens from "@/lib/splashScreens.json";
 import { IconClose } from "./icons";
 
 export default function SettingsDialog({
@@ -100,6 +101,32 @@ export default function SettingsDialog({
     router.push("/login");
     router.refresh();
   }
+
+  // 端末情報（起動画像がどの端末で一致していないかを調べるための表示）。
+  // iOS のスプラッシュは media が実機と完全一致しないと真っ白になるため、
+  // 実測値と「一致した起動画像があるか」をここで確認できるようにする。
+  const [deviceInfo, setDeviceInfo] = useState<{
+    screen: string;
+    dpr: number;
+    viewport: string;
+    standalone: boolean;
+    matched: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    const matched =
+      splashScreens.find((s) => window.matchMedia(s.media).matches) ?? null;
+    setDeviceInfo({
+      screen: `${window.screen.width}x${window.screen.height}`,
+      dpr: window.devicePixelRatio,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      standalone:
+        window.matchMedia("(display-mode: standalone)").matches ||
+        // iOS Safari 独自
+        (window.navigator as unknown as { standalone?: boolean }).standalone === true,
+      matched: matched?.href ?? null,
+    });
+  }, []);
 
   return (
     <div
@@ -226,6 +253,18 @@ export default function SettingsDialog({
               {commit} ・ {buildTime}
             </span>
           </div>
+
+          {/* 端末情報（起動画面の不一致を調べるための一時的な表示） */}
+          {deviceInfo && (
+            <div className="rounded-lg bg-neutral-100 p-2 font-mono text-[10px] leading-relaxed text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+              <div>screen: {deviceInfo.screen} @{deviceInfo.dpr}x</div>
+              <div>viewport: {deviceInfo.viewport}</div>
+              <div>standalone: {String(deviceInfo.standalone)}</div>
+              <div className={deviceInfo.matched ? "" : "text-red-500"}>
+                splash: {deviceInfo.matched ?? "一致なし"}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
