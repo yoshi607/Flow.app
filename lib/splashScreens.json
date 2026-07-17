@@ -96,12 +96,20 @@
     "href": "/splash/apple-splash-1136x640.png"
   },
   {
-    "media": "(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
-    "href": "/splash/apple-splash-2048x2732.png"
+    "media": "(device-width: 834px) and (device-height: 1210px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
+    "href": "/splash/apple-splash-1668x2420.png"
   },
   {
-    "media": "(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)",
-    "href": "/splash/apple-splash-2732x2048.png"
+    "media": "(device-width: 834px) and (device-height: 1210px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)",
+    "href": "/splash/apple-splash-2420x1668.png"
+  },
+  {
+    "media": "(device-width: 1032px) and (device-height: 1376px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
+    "href": "/splash/apple-splash-2064x2752.png"
+  },
+  {
+    "media": "(device-width: 1032px) and (device-height: 1376px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)",
+    "href": "/splash/apple-splash-2752x2064.png"
   },
   {
     "media": "(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
@@ -110,6 +118,14 @@
   {
     "media": "(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)",
     "href": "/splash/apple-splash-2388x1668.png"
+  },
+  {
+    "media": "(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
+    "href": "/splash/apple-splash-2048x2732.png"
+  },
+  {
+    "media": "(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)",
+    "href": "/splash/apple-splash-2732x2048.png"
   },
   {
     "media": "(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)",
