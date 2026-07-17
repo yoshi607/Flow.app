@@ -38,6 +38,21 @@ export default function SettingsDialog({
     setPendingPassword("");
   }
 
+  // Supabase の認証エラーを、原因特定用に status / code 付きで見える化する。
+  function describeAuthError(err: unknown, fallback: string): string {
+    // AuthError は status（HTTP）と code（例: same_password, reauthentication_needed）を持つ
+    const e = err as { message?: string; status?: number; code?: string } | null;
+    // 開発者確認用にコンソールへ生のまま出す
+    console.error("password change error:", err);
+    if (e && (e.message || e.code || e.status)) {
+      const parts = [e.message ?? fallback];
+      if (e.code) parts.push(`code=${e.code}`);
+      if (e.status) parts.push(`status=${e.status}`);
+      return parts.join(" / ");
+    }
+    return fallback;
+  }
+
   // step1: 新パスワードを検証し、確認コードをメール送信する
   async function handleSendCode(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -68,9 +83,7 @@ export default function SettingsDialog({
       setPwStep("code");
       setPwInfo(`確認コードを ${userEmail} に送りました。メールを確認してください。`);
     } catch (err: unknown) {
-      setPwError(
-        err instanceof Error ? err.message : "確認コードの送信に失敗しました。",
-      );
+      setPwError(describeAuthError(err, "確認コードの送信に失敗しました。"));
     } finally {
       setPwSaving(false);
     }
@@ -101,9 +114,7 @@ export default function SettingsDialog({
       resetPwFlow();
     } catch (err: unknown) {
       setPwError(
-        err instanceof Error
-          ? err.message
-          : "コードが正しくないか、パスワードの変更に失敗しました。",
+        describeAuthError(err, "コードが正しくないか、パスワードの変更に失敗しました。"),
       );
     } finally {
       setPwSaving(false);
