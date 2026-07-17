@@ -442,3 +442,92 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* 起動時の導入アニメーション（SplashIntro）
+   OS のスプラッシュと同じ背景色から続けて、白い矢印が左下から波を描いて
+   現れ、右上へ抜けていく。JS を使わず CSS だけで完結させ、最後は
+   visibility:hidden で自分から消える（消えるのに JS を待たない）。
+   時間を変えたい時は下の delay/duration をまとめて調整する。 */
+.flow-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: #dceef8;
+  animation: flow-intro-out 260ms ease-out 1080ms forwards;
+}
+@keyframes flow-intro-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.flow-intro-svg {
+  width: min(46vmin, 220px);
+  height: min(46vmin, 220px);
+}
+
+/* 線：左下の尾から矢じりへ向かって描かれていく */
+.flow-intro-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: flow-intro-draw 620ms cubic-bezier(0.65, 0, 0.35, 1) 60ms forwards;
+}
+@keyframes flow-intro-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 矢じり：線が届いてから、少し弾んで現れる */
+.flow-intro-head {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: flow-intro-head 200ms cubic-bezier(0.34, 1.56, 0.64, 1) 640ms forwards;
+}
+@keyframes flow-intro-head {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 形になったあと、矢印ごと右上へ抜けていく */
+.flow-intro-arrow {
+  animation: flow-intro-exit 420ms cubic-bezier(0.55, 0, 0.9, 0.3) 860ms forwards;
+}
+@keyframes flow-intro-exit {
+  from {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate(34px, -34px);
+    opacity: 0;
+  }
+}
+
+/* 動きを減らす設定の人には見せない（静かに消えるだけ） */
+@media (prefers-reduced-motion: reduce) {
+  .flow-intro {
+    animation: flow-intro-out 200ms ease-out 200ms forwards;
+  }
+  .flow-intro-line {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+  .flow-intro-head {
+    opacity: 1;
+    animation: none;
+  }
+  .flow-intro-arrow {
+    animation: none;
+  }
+}
