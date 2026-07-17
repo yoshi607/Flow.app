@@ -18,50 +18,23 @@ export default function SettingsDialog({
   const supabase = createClient();
 
   // パスワード変更用の状態。
-  // Supabase の「Secure password change」が有効なため、変更前にメールで届く
-  // 確認コード（nonce）での再認証が必須。そのため2段階にする:
-  //   step "form" … 新パスワードを入力 → reauthenticate() でコード送信
-  //   step "code" … 届いたコードを入力 → updateUser({ password, nonce })
+  // このプロジェクトは Supabase 側で「パスワード変更時に現在のパスワードを必須」
+  // （GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD）が有効。
+  // そのため updateUser に current_password を渡す必要がある（メールコードは不要）。
   const [pwOpen, setPwOpen] = useState(false);
-  const [pwStep, setPwStep] = useState<"form" | "code">("form");
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
-  const [pwInfo, setPwInfo] = useState<string | null>(null);
   const [pwDone, setPwDone] = useState(false);
-  // 新パスワードは段階をまたいで保持する（コード入力画面では再入力させない）
-  const [pendingPassword, setPendingPassword] = useState("");
 
-  function resetPwFlow() {
-    setPwStep("form");
-    setPwError(null);
-    setPwInfo(null);
-    setPendingPassword("");
-  }
-
-  // Supabase の認証エラーを、原因特定用に status / code 付きで見える化する。
-  function describeAuthError(err: unknown, fallback: string): string {
-    // AuthError は status（HTTP）と code（例: same_password, reauthentication_needed）を持つ
-    const e = err as { message?: string; status?: number; code?: string } | null;
-    // 開発者確認用にコンソールへ生のまま出す
-    console.error("password change error:", err);
-    if (e && (e.message || e.code || e.status)) {
-      const parts = [e.message ?? fallback];
-      if (e.code) parts.push(`code=${e.code}`);
-      if (e.status) parts.push(`status=${e.status}`);
-      return parts.join(" / ");
-    }
-    return fallback;
-  }
-
-  // step1: 新パスワードを検証し、確認コードをメール送信する
-  async function handleSendCode(e: React.FormEvent<HTMLFormElement>) {
+  async function handleChangePassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const data = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    const currentPassword = String(data.get("current-password") ?? "");
     const password = String(data.get("new-password") ?? "");
     const confirm = String(data.get("confirm-password") ?? "");
 
     setPwError(null);
-    setPwInfo(null);
     setPwDone(false);
 
     const issue = passwordIssue(password);
@@ -73,49 +46,36 @@ export default function SettingsDialog({
       setPwError("確認用パスワードが一致しません。");
       return;
     }
-
-    setPwSaving(true);
-    try {
-      // ログイン中ユーザーのメール（または電話）へ確認コードを送る
-      const { error } = await supabase.auth.reauthenticate();
-      if (error) throw error;
-      setPendingPassword(password);
-      setPwStep("code");
-      setPwInfo(`確認コードを ${userEmail} に送りました。メールを確認してください。`);
-    } catch (err: unknown) {
-      setPwError(describeAuthError(err, "確認コードの送信に失敗しました。"));
-    } finally {
-      setPwSaving(false);
-    }
-  }
-
-  // step2: 届いたコード（nonce）でパスワードを確定する
-  async function handleConfirmCode(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const data = new FormData(e.currentTarget);
-    const nonce = String(data.get("code") ?? "").trim();
-
-    setPwError(null);
-
-    if (!nonce) {
-      setPwError("確認コードを入力してください。");
+    if (password === currentPassword) {
+      setPwError("現在と異なるパスワードを設定してください。");
       return;
     }
 
     setPwSaving(true);
     try {
       const { error } = await supabase.auth.updateUser({
-        password: pendingPassword,
-        nonce,
+        password,
+        current_password: currentPassword,
       });
       if (error) throw error;
       setPwDone(true);
+      form.reset();
       setPwOpen(false);
-      resetPwFlow();
     } catch (err: unknown) {
-      setPwError(
-        describeAuthError(err, "コードが正しくないか、パスワードの変更に失敗しました。"),
-      );
+      const e2 = err as { message?: string; code?: string; status?: number };
+      // 開発者確認用にコンソールへ生のまま残す
+      console.error("password change error:", err);
+      // 現在のパスワード違い・必須系はわかりやすい日本語にする
+      if (
+        e2?.code === "current_password_required" ||
+        e2?.code === "current_password_invalid" ||
+        e2?.status === 400 ||
+        /current password/i.test(e2?.message ?? "")
+      ) {
+        setPwError("現在のパスワードが正しくありません。");
+      } else {
+        setPwError(e2?.message ?? "パスワードの変更に失敗しました。");
+      }
     } finally {
       setPwSaving(false);
     }
@@ -166,13 +126,13 @@ export default function SettingsDialog({
             <div className="font-medium">{userEmail || "（不明）"}</div>
           </div>
 
-          {/* パスワード変更（Secure password change 対応：メール確認コード方式） */}
+          {/* パスワード変更（現在のパスワードで本人確認する方式） */}
           <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
             <button
               onClick={() => {
                 setPwOpen((v) => !v);
                 setPwDone(false);
-                resetPwFlow();
+                setPwError(null);
               }}
               className="flex w-full items-center justify-between font-medium"
             >
@@ -186,8 +146,8 @@ export default function SettingsDialog({
               </p>
             )}
 
-            {pwOpen && pwStep === "form" && (
-              <form onSubmit={handleSendCode} className="mt-3 space-y-2">
+            {pwOpen && (
+              <form onSubmit={handleChangePassword} className="mt-3 space-y-2">
                 {/* 自動入力のためユーザー名欄を隠して置く */}
                 <input
                   type="text"
@@ -197,6 +157,14 @@ export default function SettingsDialog({
                   className="hidden"
                   readOnly
                   aria-hidden
+                />
+                <input
+                  type="password"
+                  name="current-password"
+                  required
+                  autoComplete="current-password"
+                  placeholder="現在のパスワード"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-900"
                 />
                 <input
                   type="password"
@@ -218,7 +186,6 @@ export default function SettingsDialog({
                 />
                 <p className="text-xs text-neutral-400">
                   10文字以上。英小文字・英大文字・数字・記号のうち3種類以上。
-                  本人確認のため、続けてメールに届くコードの入力が必要です。
                 </p>
                 {pwError && (
                   <p className="text-xs text-red-600 dark:text-red-400">{pwError}</p>
@@ -228,41 +195,7 @@ export default function SettingsDialog({
                   disabled={pwSaving}
                   className="w-full rounded-lg bg-brand-500 py-2 font-medium text-white transition hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {pwSaving ? "送信中…" : "確認コードを送る"}
-                </button>
-              </form>
-            )}
-
-            {pwOpen && pwStep === "code" && (
-              <form onSubmit={handleConfirmCode} className="mt-3 space-y-2">
-                {pwInfo && (
-                  <p className="text-xs text-green-600 dark:text-green-400">{pwInfo}</p>
-                )}
-                <input
-                  type="text"
-                  name="code"
-                  required
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="メールに届いた確認コード"
-                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 tracking-widest outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-900"
-                />
-                {pwError && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{pwError}</p>
-                )}
-                <button
-                  type="submit"
-                  disabled={pwSaving}
-                  className="w-full rounded-lg bg-brand-500 py-2 font-medium text-white transition hover:bg-brand-600 disabled:opacity-50"
-                >
                   {pwSaving ? "変更中…" : "パスワードを変更する"}
-                </button>
-                <button
-                  type="button"
-                  onClick={resetPwFlow}
-                  className="w-full py-1 text-xs text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
-                >
-                  やり直す（新しいパスワードを入れ直す）
                 </button>
               </form>
             )}
