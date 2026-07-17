@@ -1,14 +1,21 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import dynamic from "next/dynamic";
 import { useNotes } from "@/lib/store";
 import { type Note } from "@/lib/types";
 import { stripHtml } from "@/lib/utils";
 import Sidebar, { type View } from "./Sidebar";
 import NoteList from "./NoteList";
-import NoteEditor from "./NoteEditor";
-import SettingsDialog from "./SettingsDialog";
+
+// 本文エディタは Tiptap 一式・手書き・画像書き出しを連れてくるため重い。
+// 起動時（メモ未選択）は不要なので、初期JSから切り離して遅延読み込みする。
+// ※起動直後にアイドルで先読みするので、実際に開く時には既に読み込み済みで、
+//   ＋ボタンの展開アニメーション（寸法の実測）も従来どおり動く。
+const NoteEditor = dynamic(() => import("./NoteEditor"), { ssr: false });
+// 設定ダイアログも開くまで不要
+const SettingsDialog = dynamic(() => import("./SettingsDialog"), { ssr: false });
 
 export default function AppShell({ userEmail }: { userEmail: string }) {
   const { notes, folders, loading, createNote, trashNote, deleteNotePermanently } =
@@ -53,6 +60,25 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   // 画面左端からのドラッグとみなす幅
   const EDGE_PX = 28;
+
+  // 一覧を描き終えた後、手が空いた時間にエディタ本体を先読みしておく。
+  // 起動の速さは保ったまま、メモを開く瞬間は待たされない。
+  useEffect(() => {
+    const preload = () => {
+      void import("./NoteEditor");
+    };
+    const ric = (
+      window as unknown as {
+        requestIdleCallback?: (cb: () => void) => number;
+      }
+    ).requestIdleCallback;
+    if (typeof ric === "function") {
+      ric(preload);
+      return;
+    }
+    const t = window.setTimeout(preload, 1200); // Safari 等の保険
+    return () => window.clearTimeout(t);
+  }, []);
 
   const isMobile = () =>
     typeof window !== "undefined" &&
