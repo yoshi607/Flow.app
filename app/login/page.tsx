@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { passwordIssue } from "@/lib/passwordPolicy";
 
-type Mode = "signin" | "signup" | "magic";
+type Mode = "signin" | "signup" | "magic" | "reset";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,6 +50,14 @@ export default function LoginPage() {
         if (error) throw error;
         setMessage(
           "確認メールを送信しました。メール内のリンクを開いて登録を完了してください。",
+        );
+      } else if (mode === "reset") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${location.origin}/auth/callback?next=/reset-password`,
+        });
+        if (error) throw error;
+        setMessage(
+          "パスワード再設定用のリンクをメールで送信しました。メールのリンクを開いて新しいパスワードを設定してください。",
         );
       } else {
         const { error } = await supabase.auth.signInWithOtp({
@@ -121,6 +129,12 @@ export default function LoginPage() {
           </button>
         </div>
 
+        {mode === "reset" && (
+          <p className="mb-3 text-sm text-neutral-500">
+            登録したメールアドレスに、パスワード再設定用のリンクを送ります。
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
             type="email"
@@ -130,7 +144,7 @@ export default function LoginPage() {
             placeholder="メールアドレス"
             className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
           />
-          {mode !== "magic" && (
+          {mode !== "magic" && mode !== "reset" && (
             <>
               <input
                 type="password"
@@ -161,9 +175,36 @@ export default function LoginPage() {
                 ? "ログイン"
                 : mode === "signup"
                   ? "登録する"
-                  : "ログインリンクを送る"}
+                  : mode === "reset"
+                    ? "再設定リンクを送る"
+                    : "ログインリンクを送る"}
           </button>
         </form>
+
+        {mode === "signin" && (
+          <button
+            onClick={() => {
+              setMode("reset");
+              setError(null);
+              setMessage(null);
+            }}
+            className="mt-3 w-full text-center text-sm text-brand-600 hover:underline dark:text-brand-400"
+          >
+            パスワードをお忘れですか？
+          </button>
+        )}
+        {mode === "reset" && (
+          <button
+            onClick={() => {
+              setMode("signin");
+              setError(null);
+              setMessage(null);
+            }}
+            className="mt-3 w-full text-center text-sm text-neutral-500 hover:underline"
+          >
+            ← ログインへ戻る
+          </button>
+        )}
 
         <div className="flex items-center gap-3 my-4 text-xs text-neutral-400">
           <div className="flex-1 h-px bg-neutral-300 dark:bg-neutral-700" />
