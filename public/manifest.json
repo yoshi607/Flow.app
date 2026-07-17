@@ -4,7 +4,7 @@
   "description": "iPhone / iPad / Windows で同期するクラウドメモ",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f8fa",
+  "background_color": "#dceef8",
   "theme_color": "#eaeff3",
   "orientation": "portrait",
   "lang": "ja",

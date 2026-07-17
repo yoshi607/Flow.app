@@ -155,8 +155,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=（anon public キー）
 ```powershell
 npm install
 node scripts/gen-icons.mjs   # PWA用アイコンを生成
+node scripts/gen-splash.mjs  # iOS用の起動画面（スプラッシュ）を生成
 npm run dev
 ```
+
+> アイコン・スプラッシュは生成済みのものをリポジトリに含めているため、
+> 通常は再実行不要です。`Flow_icon/` の元画像や背景色を変えた時だけ実行してください。
 
 ブラウザで **http://localhost:3000** を開き、新規登録 → ログインすればメモが使えます。
 
