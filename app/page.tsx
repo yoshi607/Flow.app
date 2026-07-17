@@ -17,7 +17,7 @@ export default async function Home() {
 
   return (
     <NotesProvider userId={userId} initialNotes={notes} initialFolders={folders}>
-      {/* OSのスプラッシュから続く導入アニメーション。CSSだけで動いて自分で消える */}
+      {/* OSのスプラッシュから続く導入アニメーション。矢印を線描きして自分で消える */}
       <SplashIntro />
       <AppShell userEmail={userEmail ?? ""} />
     </NotesProvider>

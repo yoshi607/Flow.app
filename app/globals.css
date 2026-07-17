@@ -443,10 +443,9 @@ body {
   user-select: none;
 }
 
-/* 起動時の導入アニメーション（SplashIntro）の配置だけを担当する。
-   動き自体は SVG 側の SMIL で行う（CSS アニメーションを使わない理由は
-   components/SplashIntro.tsx の説明を参照：iOS だと CSS アニメーションが
-   スタイルシート再適用で頭から再生し直され、導入が2回流れてしまうため）。
+/* 起動時の導入オーバーレイ（SplashIntro）。OS のスプラッシュと同じ #dceef8 を
+   全画面に敷き、中央で LogoArrowDraw が矢印を線描きする。描き終えて静止した
+   あと data-leaving="true" が付いて溶暗し、退場する。
    当たり判定を持たせないので、万一消え残っても操作を邪魔しない。 */
 .flow-intro {
   position: fixed;
@@ -455,13 +454,16 @@ body {
   display: grid;
   place-items: center;
   pointer-events: none;
+  /* OS スプラッシュ（gen-splash.mjs / apple-touch-startup-image）と同じ地色。
+     継ぎ目なく引き継ぐため、ここは必ずスプラッシュ背景色と一致させる。 */
+  background: #dceef8;
+  opacity: 1;
+  transition: opacity 0.5s ease;
 }
 
-.flow-intro-bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+/* 描き終えて静止したあと、溶暗して退場 */
+.flow-intro[data-leaving="true"] {
+  opacity: 0;
 }
 
 .flow-intro-svg {
@@ -470,9 +472,78 @@ body {
   height: min(46vmin, 220px);
 }
 
-/* 動きを減らす設定の人には見せない */
+/* --- ロゴの矢印を「下から上へ」線で描く（stroke-dashoffset） --- */
+
+/* 白い線本体。パス長 --arrow-len は JS(getTotalLength) がマウント後に入れる。
+   入るまではフォールバック 9999 でダッシュを画面外へ押し出し、線を隠しておく。
+   dashoffset をパス長にすると尾（左下）から先が見えない状態＝描き始め前になる。 */
+.flow-arrow-line {
+  stroke-dasharray: var(--arrow-len, 9999);
+  stroke-dashoffset: var(--arrow-len, 9999);
+}
+
+/* 矢じり。自分の bbox 中央を原点に、縮んで消えた状態で待機する。 */
+.flow-arrow-head {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+
+/* 計測が済んで描画フェーズに入ったら再生開始（マウント時の 1 回だけ）。 */
+[data-phase="drawing"] .flow-arrow-line {
+  /* ease-out：描き終わり際になめらかに減速する（元 1s から計 1.44 倍速） */
+  animation: flow-arrow-draw 0.69s ease-out forwards;
+}
+[data-phase="drawing"] .flow-arrow-head {
+  /* 線が先端へ届く頃（0.54s）に、わずかに弾んで現れる（計 1.44 倍速） */
+  animation: flow-arrow-head-in 0.23s cubic-bezier(0.34, 1.56, 0.64, 1) 0.54s both;
+}
+
+/* 完了後は完全に描かれた状態で静止。ここでインラインに固定するので、
+   ループしないのはもちろん、スタイルが再適用されても頭から描き直さない。 */
+[data-phase="done"] .flow-arrow-line {
+  stroke-dashoffset: 0;
+  animation: none;
+}
+[data-phase="done"] .flow-arrow-head {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+@keyframes flow-arrow-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes flow-arrow-head-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 動きを減らす設定：導入は隠さず、矢印を最初から完全に描かれた状態で静止表示。
+   （JS が動く前の初回描画から効かせたいので CSS 側にも入れておく） */
 @media (prefers-reduced-motion: reduce) {
   .flow-intro {
-    display: none;
+    transition: none;
+  }
+  .flow-arrow-line {
+    stroke-dashoffset: 0 !important;
+    animation: none !important;
+  }
+  .flow-arrow-head {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
   }
 }
