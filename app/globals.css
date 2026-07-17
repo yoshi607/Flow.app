@@ -445,8 +445,8 @@ body {
 
 /* 起動時の導入アニメーション（SplashIntro）
    OS のスプラッシュと同じ背景色から続けて、白い矢印が左下から波を描いて
-   現れ、右上へ抜けていく。JS を使わず CSS だけで完結させ、最後は
-   visibility:hidden で自分から消える（消えるのに JS を待たない）。
+   現れ、そのまま波が右上へ流れ出ていく。JS を使わず CSS だけで完結させ、
+   最後は visibility:hidden で自分から消える（消えるのに JS を待たない）。
    時間を変えたい時は下の delay/duration をまとめて調整する。 */
 .flow-intro {
   position: fixed;
@@ -455,7 +455,7 @@ body {
   display: grid;
   place-items: center;
   background: #dceef8;
-  animation: flow-intro-out 260ms ease-out 1080ms forwards;
+  animation: flow-intro-out 260ms ease-out 1180ms forwards;
 }
 @keyframes flow-intro-out {
   to {
@@ -469,48 +469,61 @@ body {
   height: min(46vmin, 220px);
 }
 
-/* 線：左下の尾から矢じりへ向かって描かれていく */
+/* 線：描くのも抜けるのも同じ「波が流れる」動きにする。
+   pathLength=1 に対して dash=1/gap=1 なので、dashoffset を
+     1 → 0 : 尾から先端へ線が引かれる（現れる）
+     0 → -1: 尾の側から線が引き上げられ、先端から流れ出ていく（消える）
+   と続けて動かすと、逆再生ではなく一本の波が通り抜けたように見える。
+   区間ごとに緩急を変えたいので timing-function をキーフレーム内で指定する。 */
 .flow-intro-line {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: flow-intro-draw 620ms cubic-bezier(0.65, 0, 0.35, 1) 60ms forwards;
+  animation: flow-intro-flow 1250ms 60ms forwards;
 }
-@keyframes flow-intro-draw {
-  to {
+@keyframes flow-intro-flow {
+  0% {
+    stroke-dashoffset: 1;
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  48% {
     stroke-dashoffset: 0;
+    animation-timing-function: linear;
+  }
+  58% {
+    stroke-dashoffset: 0;
+    animation-timing-function: cubic-bezier(0.55, 0, 0.35, 1);
+  }
+  100% {
+    stroke-dashoffset: -1;
   }
 }
 
-/* 矢じり：線が届いてから、少し弾んで現れる */
+/* 矢じり：線が届いたら弾んで現れ、波が流れ出るのに合わせて右上へ抜ける */
 .flow-intro-head {
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
-  animation: flow-intro-head 200ms cubic-bezier(0.34, 1.56, 0.64, 1) 640ms forwards;
+  animation: flow-intro-head 1250ms 60ms forwards;
 }
 @keyframes flow-intro-head {
-  from {
+  0%,
+  40% {
     opacity: 0;
     transform: scale(0.5);
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
-  to {
+  54% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translate(0, 0);
   }
-}
-
-/* 形になったあと、矢印ごと右上へ抜けていく */
-.flow-intro-arrow {
-  animation: flow-intro-exit 420ms cubic-bezier(0.55, 0, 0.9, 0.3) 860ms forwards;
-}
-@keyframes flow-intro-exit {
-  from {
-    transform: translate(0, 0);
+  72% {
     opacity: 1;
+    transform: scale(1) translate(0, 0);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.35, 1);
   }
-  to {
-    transform: translate(34px, -34px);
+  100% {
     opacity: 0;
+    transform: scale(1) translate(14px, -14px);
   }
 }
 
@@ -525,9 +538,6 @@ body {
   }
   .flow-intro-head {
     opacity: 1;
-    animation: none;
-  }
-  .flow-intro-arrow {
     animation: none;
   }
 }

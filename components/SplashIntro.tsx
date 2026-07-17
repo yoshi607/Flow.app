@@ -1,6 +1,7 @@
 // 起動時の導入アニメーション。
 // OS のスプラッシュ（同じ背景色 #dceef8）から途切れず続けて、白い矢印が
-// 左下から波を描いて現れ、Flow アイコンの形になったあと右上へ抜けていく。
+// 左下から波を描いて現れ、Flow アイコンの形になったあと、その波がそのまま
+// 右上へ流れ出ていく（消えるのも「描く」のと同じ動き。詳細は globals.css）。
 //
 // 【JS を使わない】"use client" を付けず、サーバーが返す HTML に最初から
 // 含める。動きは CSS だけで完結し、最後は visibility:hidden で自分から消える。
@@ -24,8 +25,9 @@ export default function SplashIntro() {
   return (
     <div className="flow-intro" aria-hidden="true">
       <svg className="flow-intro-svg" viewBox="0 0 100 100">
-        <g className="flow-intro-arrow">
-          {/* pathLength=1 にすると、線の実長を測らずに 1→0 で描き出せる */}
+        <g>
+          {/* pathLength=1 にすると、線の実長を測らずに dashoffset 1→0→-1 で
+              「引かれる → 流れ出る」を一続きに動かせる */}
           <path
             className="flow-intro-line"
             d={LINE}
