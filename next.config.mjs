@@ -2,7 +2,16 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
   dest: "public",
-  reloadOnOnline: true,
+  // オンライン復帰時に location.reload() させない。
+  // next-pwa は true だと `window.addEventListener("online", () => location.reload())`
+  // を仕込む（sw-entry.js）。PWA は起動直後にネットワーク状態が確定する際 online が
+  // 発火しやすく、その結果アプリが丸ごと再読み込みされていた。
+  //  - 起動アニメーションが2回再生される
+  //  - 起動のたびに余計な全ページ再読み込みが走り、起動が遅くなる
+  //  - 編集中に電波が復帰すると画面が作り直される
+  // データはリアルタイム同期で追従し、HTML も navigate を NetworkFirst で
+  // 取り直すため、リロードで取り戻すものは無い。
+  reloadOnOnline: false,
   disable: process.env.NODE_ENV === "development",
   // next-pwa が自動追加する "/" 専用キャッシュルート（タイムアウト設定が無く
   // ネットワークを待ち続けうる）を無効化し、下記の navigate ルート1本（3秒タイムアウト）に統一する。
