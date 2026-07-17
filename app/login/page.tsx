@@ -68,10 +68,36 @@ export default function LoginPage() {
         setMessage("ログイン用リンクをメールで送信しました。メールを確認してください。");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      setError(describeAuthError(err));
     } finally {
       setLoading(false);
     }
+  }
+
+  // Supabase の認証エラーを原因が分かる形にする。
+  // メール送信に失敗すると message が空（"{}" に見える）ことがあるため、
+  // code / status も添え、送信系は具体的な当たりを付けられる文言にする。
+  function describeAuthError(err: unknown): string {
+    const e = err as { message?: string; status?: number; code?: string } | null;
+    console.error("auth error:", err);
+    const msg = (e?.message ?? "").trim();
+    const meaningless = !msg || msg === "{}" || msg === "[object Object]";
+
+    if (meaningless || /error sending/i.test(msg)) {
+      const detail = [e?.code && `code=${e.code}`, e?.status && `status=${e.status}`]
+        .filter(Boolean)
+        .join(" / ");
+      return (
+        "メールの送信に失敗しました。SMTP設定（送信元アドレス・APIキー）や、" +
+        "送信先が許可されたアドレスかを確認してください。" +
+        (detail ? `（${detail}）` : "")
+      );
+    }
+
+    const parts = [msg];
+    if (e?.code) parts.push(`code=${e.code}`);
+    if (e?.status) parts.push(`status=${e.status}`);
+    return parts.join(" / ");
   }
 
   async function handleGoogle() {
