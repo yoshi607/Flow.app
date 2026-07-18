@@ -33,6 +33,11 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   // PWA の「別ウィンドウで開く」で右側にドック（固定表示）するメモの id。
   // OS の別ウィンドウが作れないぶん、画面内を左右に分割して両方を見せる。
   const [dockedId, setDockedId] = useState<string | null>(null);
+  // 右ドックを開いた状態か（横画面の幅アニメの目標。true=幅50%, false=幅0%）。
+  const [dockOpen, setDockOpen] = useState(false);
+  // 開閉アニメ再生中のみ true。この間だけ width の transition を効かせ、
+  // 回転や（Stage Manager 等の）ウィンドウ幅変化では即時追従させる。
+  const [dockAnimating, setDockAnimating] = useState(false);
   // 横向き（幅1024px以上）か。ドック中はこれで「左右分割」か「メモ全画面」かを
   // 切り替える（回転にリアクティブに追従する）。
   const wide = useMediaQuery("(min-width: 1024px)");
@@ -453,6 +458,15 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       setSelectedId(null);
       setFullscreen(false);
       setSidebarCollapsed(true);
+      // 横画面：右ドックを「右端固定・左端が伸びる」形で幅0→50%へ広げる。
+      // まず幅0で描画し、確実に1フレーム描いてから50%へ transition させる
+      // （二重 rAF で起点の0%を描かせる）。縦画面は全画面なので幅アニメは無い。
+      setDockOpen(false);
+      setDockAnimating(true);
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => setDockOpen(true)),
+      );
+      window.setTimeout(() => setDockAnimating(false), 320);
       return;
     }
 
@@ -467,6 +481,22 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     );
     // 元のウィンドウはメモを閉じ、Flow の一覧（新しい Flow 画面）に戻す。
     closeEditor();
+  }
+
+  // 右ドックを閉じる。横画面では開くときの逆で、幅50%→0へ縮めてから解除する
+  // （右端固定のまま左端が右へ縮む＝左側が広がっていく）。縦画面は全画面なので
+  // 幅アニメは無く、即座に解除する。
+  function closeDock() {
+    if (!wide) {
+      setDockedId(null);
+      return;
+    }
+    setDockAnimating(true);
+    setDockOpen(false);
+    window.setTimeout(() => {
+      setDockedId(null);
+      setDockAnimating(false);
+    }, 300);
   }
 
   const dragging = dragX !== null || backX !== null;
@@ -661,22 +691,37 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       </div>
       </div>
 
-      {/* ドックしたメモ。横向き(wide)＝右半分の丸角パネル（右からスライドイン）、
-          縦向き＝全画面。左上の × で解除して通常表示に戻る。回転しても同じ要素の
-          クラスが変わるだけなので、メモ本文はマウントされたまま維持される。 */}
+      {/* ドックしたメモ。横向き(wide)＝右半分の丸角パネル、縦向き＝全画面。
+          横画面では「右端固定・左端が伸縮」で幅を 0↔50% に変化させて開閉する
+          （スライドではなく幅アニメ）。右端はフレックス末尾なので常に画面右端に
+          張り付き、左隣の Flow(flex-1) がその分だけ滑らかに伸縮する。
+          transition は開閉中(dockAnimating)だけ効かせるので、回転やウィンドウ幅の
+          変化には即時追従する（カクつき防止に per-frame の JS は使わず CSS 任せ）。
+          左上の × で解除して通常表示に戻る。回転してもクラスが変わるだけなので、
+          メモ本文はマウントされたまま維持される。 */}
       {dockedNote && (
         <div
           className={
             wide
-              ? "flow-dock-in flex w-1/2 min-w-0 flex-col overflow-hidden rounded-2xl bg-white dark:bg-neutral-950"
+              ? "flex min-w-0 shrink-0 flex-col overflow-hidden rounded-2xl bg-white dark:bg-neutral-950"
               : "flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950"
+          }
+          style={
+            wide
+              ? {
+                  width: dockOpen ? "50%" : "0%",
+                  transition: dockAnimating
+                    ? "width 260ms ease-in-out"
+                    : "none",
+                }
+              : undefined
           }
         >
           <NoteEditor
             key={dockedNote.id}
             note={dockedNote}
             standalone
-            onBack={() => setDockedId(null)}
+            onBack={closeDock}
           />
         </div>
       )}

@@ -325,20 +325,9 @@ body {
   }
 }
 
-/* ドック（別ウィンドウ→左右分割）で右パネルが右から滑り込む */
-@keyframes flow-dock-in {
-  from {
-    transform: translateX(100%);
-    opacity: 0.4;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-.flow-dock-in {
-  animation: flow-dock-in 320ms var(--ease-out);
-}
+/* ドック（別ウィンドウ→左右分割）の開閉は、スライドではなく右パネルの
+   幅アニメ（右端固定・左端伸縮）で見せる。実装は AppShell 側のインライン
+   style（width の transition）で行うため、ここには専用クラスは持たない。 */
 
 /* 指で戻している最中は、指の位置に完全同期させる（アニメーションを止める） */
 .flow-drag-follow {
