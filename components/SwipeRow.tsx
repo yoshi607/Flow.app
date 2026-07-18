@@ -231,7 +231,13 @@ export default function SwipeRow({
                   : "gap-1 rounded-[1.6rem] text-xs"
               } ${a.className}`}
             >
-              <span className={compact ? "h-4 w-4" : "h-5 w-5"}>{a.icon}</span>
+              <span
+                className={`flex items-center justify-center ${
+                  compact ? "h-4 w-4" : "h-5 w-5"
+                }`}
+              >
+                {a.icon}
+              </span>
               {a.label}
             </button>
           </div>

@@ -25,7 +25,13 @@ export default function FolderList({
   rowClass: (active: boolean) => string;
 }) {
   const { folders, notes, renameFolder, deleteFolder, reorderFolders } = useNotes();
-  const { isTouch } = useDevice();
+  // ダブルクリック名前変更を出し分けるための端末判定。タッチ対応の Windows PC を
+  // 「タッチ端末だから PC ではない」と切ってしまわないよう、iPad/iPhone かどうか
+  // （isIOS）で判定する（PC は原則 isIOS=false）。
+  const { isIOS } = useDevice();
+
+  const isActiveFolder = (f: Folder) =>
+    view.type === "folder" && view.folderId === f.id;
 
   const folderCount = (id: string) =>
     notes.filter((n) => n.status === "active" && n.folder_id === id).length;
@@ -118,14 +124,16 @@ export default function FolderList({
     {
       key: "rename",
       label: "名前変更",
-      icon: <IconPencil />,
+      // compact 表示の枠に合わせてアイコンサイズを明示（既定は w-5 h-5 で大きすぎ、
+      // 文字と位置がずれるため）
+      icon: <IconPencil className="h-4 w-4" />,
       className: "bg-neutral-500",
       onClick: () => promptRename(f),
     },
     {
       key: "delete",
       label: "削除",
-      icon: <IconTrash />,
+      icon: <IconTrash className="h-4 w-4" />,
       className: "bg-red-600",
       onClick: () => confirmDelete(f),
     },
@@ -172,41 +180,34 @@ export default function FolderList({
           >
             <div className="group relative">
               <button
-                className={rowClass(
-                  view.type === "folder" && view.folderId === f.id,
-                )}
+                className={rowClass(isActiveFolder(f))}
                 onClick={() => {
                   // ドラッグ直後のクリックは無視
                   if (draggingRef.current) return;
                   onChangeView({ type: "folder", folderId: f.id });
                 }}
-                // ダブルタップでの名前変更は PC（非タッチ）のみ。
-                // タッチ端末は左スワイプの「名前変更」を使う。
-                onDoubleClick={isTouch ? undefined : () => promptRename(f)}
+                // ダブルクリックでの名前変更は PC のみ（iPad/iPhone では出さない。
+                // タッチは左スワイプの「名前変更」を使う）。
+                onDoubleClick={isIOS ? undefined : () => promptRename(f)}
               >
                 <IconFolder className="h-4 w-4" />
                 <span className="flex-1 truncate">{f.name}</span>
-                {/* 件数。PC ではホバー時に削除ボタンと重ならないよう消す */}
-                <span
-                  className={`text-xs text-neutral-400 transition-opacity ${
-                    isTouch ? "" : "group-hover:opacity-0"
-                  }`}
-                >
+                {/* 件数。削除ボタンが出るとき（PC ホバー／タッチのタップ後に残る
+                    ホバー）は重ならないよう消す。これで「タッチで件数が消え、
+                    ごみ箱が出る」も同時に満たす。 */}
+                <span className="text-xs text-neutral-400 transition-opacity group-hover:opacity-0">
                   {folderCount(f.id)}
                 </span>
               </button>
-              {/* PC 向け：ホバーで出る削除ボタン。タッチ端末では出さない
-                  （タップ時にホバー状態が残って件数と重なるため。タッチの削除は
-                  左スワイプの「削除」で行う）。 */}
-              {!isTouch && (
-                <button
-                  onClick={() => confirmDelete(f)}
-                  className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded p-1 text-neutral-400 hover:bg-brand-200 hover:text-red-600 group-hover:block dark:hover:bg-neutral-700"
-                  title="フォルダを削除"
-                >
-                  <IconTrash className="h-3.5 w-3.5" />
-                </button>
-              )}
+              {/* 削除ボタン。ホバー（タッチではタップ後に残るホバー）で件数の位置に
+                  出る。PC・タッチ共通。タッチはこれに加えて左スワイプの「削除」も可。 */}
+              <button
+                onClick={() => confirmDelete(f)}
+                className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded p-1 text-neutral-400 hover:bg-brand-200 hover:text-red-600 group-hover:block dark:hover:bg-neutral-700"
+                title="フォルダを削除"
+              >
+                <IconTrash className="h-3.5 w-3.5" />
+              </button>
             </div>
           </SwipeRow>
         </div>
