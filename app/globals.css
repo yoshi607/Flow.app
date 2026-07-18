@@ -319,11 +319,24 @@ body {
   transition: transform 260ms var(--ease-out);
 }
 
-/* PC/タブレット横向き（3ペイン表示）ではスライドしない */
+/* PC/タブレット横向き（3ペイン表示）ではスライドしない。
+   代わりにメモ切替時は本文を「消えてフェードイン」させる（横スライドだと
+   長い本文がずれて見えるため）。モバイルは従来どおり右スライドのまま。 */
+@keyframes flow-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @media (min-width: 768px) {
   .flow-slide-in-right,
   .flow-slide-out-right {
     animation: none;
+  }
+  .flow-note-fade-in {
+    animation: flow-fade-in 260ms var(--ease-out);
   }
 }
 

@@ -280,6 +280,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setQuery("");
     setSidebarOpen(false);
     setFullscreen(false);
+    // 一覧を左からスライドして入れ替える（3ペイン/2分割でも動かす）
+    setListSlidingIn(true);
+    window.setTimeout(() => setListSlidingIn(false), 340);
   }
 
   // 一覧へ戻る。モバイルでは右へスライドさせてから閉じる（③の逆再生）
@@ -601,7 +604,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
                     ? "flow-slide-out-right"
                     : expanding
                       ? "" // ＋からの展開中は右スライドを重ねない
-                      : "flow-slide-in-right"
+                      : // モバイルは右スライド。3ペイン/2分割(md以上)では横に
+                        // ずらさず本文をフェードインさせる（下の CSS で出し分け）
+                        "flow-slide-in-right flow-note-fade-in"
             }`}
           >
             <NoteEditor
