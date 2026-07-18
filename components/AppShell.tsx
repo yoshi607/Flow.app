@@ -401,11 +401,19 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   function openInWindow() {
     if (!selectedId) return;
+    const id = selectedId;
+    // 画面いっぱいの、独立した新しいウィンドウ（枠）でメモを開く。
+    // 幅・高さを指定すると、タブではなく別ウィンドウとして開く。
+    const w = window.screen.availWidth;
+    const h = window.screen.availHeight;
     window.open(
-      `/note/${selectedId}`,
-      `flow-note-${selectedId}`,
-      "popup,width=480,height=720,noopener",
+      `/note/${id}`,
+      `flow-note-${id}`,
+      `popup=yes,width=${w},height=${h},left=0,top=0`,
     );
+    // 元のウィンドウはメモを閉じ、Flow の一覧（新しい Flow 画面）に戻す。
+    // これで「メモを別ウィンドウで全画面表示しつつ、こちらで Flow を使う」ができる。
+    closeEditor();
   }
 
   const dragging = dragX !== null || backX !== null;

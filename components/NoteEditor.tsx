@@ -223,8 +223,12 @@ export default function NoteEditor({
     ],
     editorProps: {
       attributes: {
+        // pb-[50vh]：本文の下に常に半ページ分の余白を確保する。これが無いと
+        // 一番下の行まで書いたときにカーソルが画面最下端（モバイルでは
+        // ソフトキーボードの裏）に張り付いて見にくい。余白があるぶんスクロール
+        // でき、書いている行を上に送れる。
         class:
-          "thin-scroll flex-1 overflow-y-auto break-words px-4 py-3 leading-relaxed outline-none",
+          "thin-scroll flex-1 overflow-y-auto break-words px-4 pt-3 pb-[50vh] leading-relaxed outline-none",
       },
       // 画像の貼り付け（PC）。画像が含まれていたら取り込む
       handlePaste: (_view, event) => {
@@ -492,8 +496,14 @@ export default function NoteEditor({
   return (
     <div className="flex h-full flex-col bg-white dark:bg-neutral-950">
       {/* ヘッダー（書式パネルを浮かせるため relative／狭い幅では折り返して
-          3点ボタンが見切れないように flex-wrap） */}
-      <div className="safe-top relative flex flex-wrap items-center gap-1 border-b border-brand-200/60 px-2 py-2 dark:border-neutral-800">
+          3点ボタンが見切れないように flex-wrap）。
+          上のセーフエリア分を足しつつ、上下の余白を対称（下も 0.5rem）にして
+          ボタンが下線に対して上寄りに見えないよう中央に揃える。以前は safe-top が
+          py-2 の上パディングを打ち消し、上0・下0.5rem の非対称になっていた。 */}
+      <div
+        style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top))" }}
+        className="relative flex flex-wrap items-center gap-1 border-b border-brand-200/60 px-2 pb-2 dark:border-neutral-800"
+      >
         <button
           onClick={onBack}
           className={`flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
