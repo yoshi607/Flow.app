@@ -50,8 +50,9 @@ export default function LogoArrowDraw({
     if (!line) return;
 
     // 実測したパス長を CSS 変数へ。dasharray / dashoffset がこれを使う。
-    const length = line.getTotalLength();
-    line.style.setProperty("--arrow-len", String(length));
+    // getTotalLength は SVG のユーザー座標（viewBox 基準）なので、画面サイズや
+    // 向きが変わっても値は不変。計測は 1 回でよい。
+    line.style.setProperty("--arrow-len", String(line.getTotalLength()));
 
     // 動きを減らす設定なら、描かずに完成形で静止して終わり
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -61,8 +62,43 @@ export default function LogoArrowDraw({
       return;
     }
 
-    // 変数を入れてから描画開始（この瞬間に @keyframes が走り出す）
-    setPhase("drawing");
+    // iPad の PWA をホーム画面から「横向きで」起動すると、最初の数百 ms は
+    // ビューポートが縦向き寸法のまま描画され、その後 landscape へ補正されて
+    // レイアウトが飛ぶことがある。その最中に線を引き始めると、矢印が中央から
+    // ずれた位置で描かれてから中央へ瞬間移動して見える（実機で報告あり）。
+    //
+    // 線は「見え始める瞬間」＝描画開始なので、ビューポート寸法が数フレーム
+    // 変化しなくなる（＝レイアウトが安定する）まで開始を遅らせる。安定する
+    // までは背景（スプラッシュと同色）だけが見えるため、ずれた矢印は出ない。
+    // 通常の起動では最初から安定しているので、数フレーム（〜50ms）で始まる。
+    let raf = 0;
+    let started = false;
+    let stableFrames = 0;
+    let lastSize = `${window.innerWidth}x${window.innerHeight}`;
+    const t0 = Date.now();
+
+    const tick = () => {
+      const size = `${window.innerWidth}x${window.innerHeight}`;
+      if (size === lastSize) {
+        stableFrames += 1;
+      } else {
+        stableFrames = 0;
+        lastSize = size;
+      }
+      // 3フレーム連続で寸法が変わらなければ安定とみなす。
+      // 揺れ続けても最大 700ms で必ず開始する保険付き。
+      if (stableFrames >= 3 || Date.now() - t0 > 700) {
+        started = true;
+        setPhase("drawing"); // この瞬間に @keyframes が走り出す
+      } else {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      if (!started) cancelAnimationFrame(raf);
+    };
     // onDrawn は初回マウント時に確定させる（依存に入れず 1 回きりにする）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
