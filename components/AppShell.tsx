@@ -402,15 +402,27 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   function openInWindow() {
     if (!selectedId) return;
     const id = selectedId;
-    // 画面いっぱいの、独立した新しいウィンドウ（枠）でメモを開く。
-    // 幅・高さを指定すると、タブではなく別ウィンドウとして開く。
-    const w = window.screen.availWidth;
-    const h = window.screen.availHeight;
-    window.open(
-      `/note/${id}`,
-      `flow-note-${id}`,
-      `popup=yes,width=${w},height=${h},left=0,top=0`,
-    );
+    // ホーム画面に追加した状態（PWA / standalone）かどうか。
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone ===
+        true;
+    if (standalone) {
+      // PWA では popup=... のウィンドウ機能を付けると OS に無視・ブロックされて
+      // 開けないことがある。機能指定なしで開くと、同一Webアプリの新しい
+      // ウィンドウとして（ログインを保ったまま）開ける。
+      window.open(`/note/${id}`, "_blank");
+    } else {
+      // PC のブラウザ（ウェブ）：画面いっぱいの独立ウィンドウ。幅・高さを
+      // 指定すると、タブではなく別ウィンドウとして開く。
+      const w = window.screen.availWidth;
+      const h = window.screen.availHeight;
+      window.open(
+        `/note/${id}`,
+        `flow-note-${id}`,
+        `popup=yes,width=${w},height=${h},left=0,top=0`,
+      );
+    }
     // 元のウィンドウはメモを閉じ、Flow の一覧（新しい Flow 画面）に戻す。
     // これで「メモを別ウィンドウで全画面表示しつつ、こちらで Flow を使う」ができる。
     closeEditor();
