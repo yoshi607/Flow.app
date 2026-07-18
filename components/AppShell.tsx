@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useNotes } from "@/lib/store";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { type Note } from "@/lib/types";
 import { stripHtml } from "@/lib/utils";
 import Sidebar, { type View } from "./Sidebar";
@@ -32,6 +33,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   // PWA の「別ウィンドウで開く」で右側にドック（固定表示）するメモの id。
   // OS の別ウィンドウが作れないぶん、画面内を左右に分割して両方を見せる。
   const [dockedId, setDockedId] = useState<string | null>(null);
+  // 横向き（幅1024px以上）か。ドック中はこれで「左右分割」か「メモ全画面」かを
+  // 切り替える（回転にリアクティブに追従する）。
+  const wide = useMediaQuery("(min-width: 1024px)");
   // 戻るアニメーション再生中（モバイル）
   const [closing, setClosing] = useState(false);
   // ＋ボタンから作った直後のメモ。一覧で「ぽんっ」と出す演出に使う
@@ -91,6 +95,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   function onTouchStart(e: React.TouchEvent) {
     if (!isMobile() || settling) return;
+    // ドック表示中はサイドバー/戻るのジェスチャーを無効化（分割・全画面で誤爆しない）
+    if (dockedId) return;
     const t = e.touches[0];
     const fromEdge = t.clientX <= EDGE_PX;
 
@@ -411,28 +417,14 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone ===
         true;
-    // 左右分割は横幅に余裕がある時（≒ iPad 横向き以上）だけにする。
-    // 縦向き iPad などでは半分ずつだと窮屈なため対象外。
-    const wideEnough =
-      typeof window !== "undefined" &&
-      window.matchMedia("(min-width: 1024px)").matches;
-
-    if (standalone && wideEnough) {
-      // ホーム画面PWAでは独立した別ウィンドウを作れない（OS制約）。そこで画面内を
-      // 左右に分割し、このメモを右側にドック（固定表示）する。左側はこれまでどおり
-      // Flow を操作できる。左側の幅を確保するためフォルダ一覧は畳んでおく
-      // （フォルダは一覧ヘッダーの☰から開ける）。
+    if (standalone) {
+      // ホーム画面PWAでは独立した別ウィンドウを作れない（OS制約）。そこで画面内で
+      // メモをドック表示する。横向き（幅1024px以上）は左右分割、縦向きはメモを
+      // 全画面表示（回転で相互に切り替わる）。左側の幅確保のためフォルダは畳む。
       setDockedId(id);
       setSelectedId(null);
       setFullscreen(false);
       setSidebarCollapsed(true);
-      return;
-    }
-
-    if (standalone) {
-      // 狭い画面（iPhone・縦向きiPad等）のPWAは左右分割が窮屈なため、従来どおり開く。
-      window.open(`/note/${id}`, "_blank");
-      closeEditor();
       return;
     }
 
@@ -454,20 +446,28 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   return (
     <div
       ref={rootRef}
-      className="h-app-screen flex overflow-hidden bg-brand-50 dark:bg-neutral-950"
+      className={`h-app-screen flex overflow-hidden ${
+        dockedNote && wide
+          ? // 左右分割：中央にやや太い線（＝この地色の隙間）＋左右を丸角パネルに
+            "gap-2 bg-brand-200/70 p-2 dark:bg-neutral-800"
+          : "bg-brand-50 dark:bg-neutral-950"
+      }`}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
     >
-      {/* ドック時（PWAの「別ウィンドウで開く」）は画面を左右に分割し、この
-          ラッパー＝左側に通常の Flow を、右側にドックしたメモを表示する。
-          非ドック時は display:contents で従来どおり（レイアウト影響なし）。 */}
+      {/* 左側＝通常の Flow。
+          ・非ドック時：display:contents で従来どおり（レイアウト影響なし）
+          ・ドック横向き：左半分の丸角パネル（overflow-hidden で右へはみ出さない）
+          ・ドック縦向き：非表示（右のメモを全画面にするため。状態は保持したまま） */}
       <div
         className={
-          dockedNote
-            ? "relative flex min-w-0 flex-1 lg:flex-none lg:w-1/2"
-            : "contents"
+          !dockedNote
+            ? "contents"
+            : wide
+              ? "relative flex min-w-0 flex-1 overflow-hidden rounded-2xl bg-brand-50 dark:bg-neutral-950"
+              : "hidden"
         }
       >
       {/* サイドバー（モバイルはドロワー / md以上は最小化可能 / 全画面時は非表示）
@@ -533,11 +533,11 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       {/* メモ一覧（全画面時は非表示）
           ※iPad縦(768〜834px)でも本文が潰れないよう、一覧の幅は控えめにする */}
       <div
-        className={`w-full shrink-0 flex-col border-r border-brand-200/60 dark:border-neutral-800 md:flex md:w-72 lg:w-80 ${
-          selectedId ? "hidden md:flex" : "flex"
-        } ${fullscreen ? "md:hidden" : ""} ${
-          listSlidingIn ? "flow-slide-in-left" : ""
-        }`}
+        className={`w-full shrink-0 flex-col border-r border-brand-200/60 dark:border-neutral-800 md:flex md:w-72 ${
+          dockedNote && wide ? "lg:w-56" : "lg:w-80"
+        } ${selectedId ? "hidden md:flex" : "flex"} ${
+          fullscreen ? "md:hidden" : ""
+        } ${listSlidingIn ? "flow-slide-in-left" : ""}`}
       >
         <NoteList
           notes={visibleNotes}
@@ -546,7 +546,11 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           query={query}
           selectedId={selectedId}
           onQueryChange={setQuery}
-          onSelect={setSelectedId}
+          onSelect={(id) => {
+            setSelectedId(id);
+            // ドック中（左が狭い）はメモを選んだらフォルダ一覧を畳んで本文を出す
+            if (dockedNote) setSidebarCollapsed(true);
+          }}
           onCreate={handleCreate}
           onRequestDelete={requestDelete}
           poppedId={poppedId}
@@ -566,7 +570,17 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           超えて広がらないようにする（iPad縦の3分割で右側が見切れるのを防ぐ） */}
       <div
         ref={editorPaneRef}
-        className={`min-w-0 flex-1 flex-col ${selectedId ? "flex" : "hidden md:flex"}`}
+        className={`min-w-0 flex-1 flex-col ${
+          dockedNote && wide
+            ? // ドック左側：フォルダ一覧を開いたら本文を右へスライドして隠す
+              // （overflow-hidden の左パネルで見切れる＝右へ抜けて消える）
+              `flex transition-transform duration-300 ${
+                sidebarCollapsed ? "translate-x-0" : "translate-x-full"
+              }`
+            : selectedId
+              ? "flex"
+              : "hidden md:flex"
+        }`}
       >
         {selectedNote ? (
           // key で開くたびに再マウントし、モバイルでは右スライドを再生。
@@ -613,9 +627,17 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       </div>
       </div>
 
-      {/* 右側：ドックしたメモ（lg以上＝横向きで左右分割）。左上の X で解除して通常表示に戻る。 */}
+      {/* ドックしたメモ。横向き(wide)＝右半分の丸角パネル（右からスライドイン）、
+          縦向き＝全画面。左上の × で解除して通常表示に戻る。回転しても同じ要素の
+          クラスが変わるだけなので、メモ本文はマウントされたまま維持される。 */}
       {dockedNote && (
-        <div className="hidden min-w-0 flex-col border-l border-brand-200/60 dark:border-neutral-800 lg:flex lg:w-1/2">
+        <div
+          className={
+            wide
+              ? "flow-dock-in flex w-1/2 min-w-0 flex-col overflow-hidden rounded-2xl bg-white dark:bg-neutral-950"
+              : "flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950"
+          }
+        >
           <NoteEditor
             key={dockedNote.id}
             note={dockedNote}
