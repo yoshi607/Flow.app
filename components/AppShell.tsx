@@ -280,7 +280,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setQuery("");
     setSidebarOpen(false);
     setFullscreen(false);
-    // 一覧を左からスライドして入れ替える（3ペイン/2分割でも動かす）
+  }
+
+  // フォルダ一覧（サイドバー）を最小化する。畳むと同時に、空いた左側へ
+  // メモ一覧を左からスライドして入れる（③の一覧スライドと同じ演出）。
+  function collapseSidebar() {
+    setSidebarCollapsed(true);
     setListSlidingIn(true);
     window.setTimeout(() => setListSlidingIn(false), 340);
   }
@@ -507,7 +512,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
               setSettingsOpen(true);
               setSidebarOpen(false);
             }}
-            onCollapse={() => setSidebarCollapsed(true)}
+            onCollapse={collapseSidebar}
           />
         </div>
       </div>
@@ -604,9 +609,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
                     ? "flow-slide-out-right"
                     : expanding
                       ? "" // ＋からの展開中は右スライドを重ねない
-                      : // モバイルは右スライド。3ペイン/2分割(md以上)では横に
-                        // ずらさず本文をフェードインさせる（下の CSS で出し分け）
-                        "flow-slide-in-right flow-note-fade-in"
+                      : "flow-slide-in-right"
             }`}
           >
             <NoteEditor
