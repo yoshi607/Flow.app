@@ -293,6 +293,38 @@ body {
   animation: flow-slide-in-left 320ms var(--ease-out);
 }
 
+/* フォルダ一覧を最小化/復帰したとき、メモ一覧を左右へ滑らせる（md以上のみ）。
+   サイドバーは幅(w-64↔w-0)を即座に切り替え、本体だけ translate で出入り
+   させている（Tailwind の md:duration-300 md:ease-out）。メモ一覧も同じ幅
+   （16rem＝w-64）・同じ時間・同じイージングで動かし、サイドバーの隣に
+   張り付いたまま一緒に流れて見せる（本文はリフローしない）。
+   ・collapse：最小化前の位置（サイドバー分だけ右＝中央寄り）から、空いた左へ
+   ・expand ：最小化中の位置（左寄せ）から、サイドバー復帰で中央へ戻る */
+@media (min-width: 768px) {
+  @keyframes flow-list-shift-left {
+    from {
+      transform: translateX(16rem);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  @keyframes flow-list-shift-right {
+    from {
+      transform: translateX(-16rem);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  .flow-list-shift-left {
+    animation: flow-list-shift-left 300ms cubic-bezier(0, 0, 0.2, 1);
+  }
+  .flow-list-shift-right {
+    animation: flow-list-shift-right 300ms cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
 /* ドック（別ウィンドウ→左右分割）で右パネルが右から滑り込む */
 @keyframes flow-dock-in {
   from {

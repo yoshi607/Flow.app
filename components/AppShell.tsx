@@ -46,6 +46,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // 全画面から抜けた直後。メモ一覧を左から滑り込ませる
   const [listSlidingIn, setListSlidingIn] = useState(false);
+  // フォルダ一覧の最小化/復帰に連動して、メモ一覧を左右へ滑らせる向き。
+  // "collapse"=最小化で中央→左へ、"expand"=復帰で左→中央へ。
+  const [listShift, setListShift] = useState<"collapse" | "expand" | null>(null);
   const editorPaneRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -282,12 +285,29 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     setFullscreen(false);
   }
 
-  // フォルダ一覧（サイドバー）を最小化する。畳むと同時に、空いた左側へ
-  // メモ一覧を左からスライドして入れる（③の一覧スライドと同じ演出）。
+  // フォルダ一覧の最小化/復帰に連動して、メモ一覧を左右へ滑らせる。
+  // レイアウト幅（サイドバー w-64↔w-0）は即座に確定させ、見た目の移動は
+  // この transform アニメーションだけで見せる（本文が折り返し直されない）。
+  function slideList(dir: "collapse" | "expand") {
+    setListShift(dir);
+    window.setTimeout(
+      () => setListShift((cur) => (cur === dir ? null : cur)),
+      320,
+    );
+  }
+
+  // フォルダ一覧（サイドバー）を最小化する。畳むと同時に、メモ一覧を
+  // 今の位置（中央寄り）から、空いた左へ滑らせる。
   function collapseSidebar() {
     setSidebarCollapsed(true);
-    setListSlidingIn(true);
-    window.setTimeout(() => setListSlidingIn(false), 340);
+    slideList("collapse");
+  }
+
+  // フォルダ一覧を元に戻す（md以上）。復帰と同時に、メモ一覧を左から
+  // 中央へ滑らせる。
+  function expandSidebar() {
+    setSidebarCollapsed(false);
+    slideList("expand");
   }
 
   // 一覧へ戻る。モバイルでは右へスライドさせてから閉じる（③の逆再生）
@@ -545,7 +565,13 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           dockedNote && wide ? "lg:w-56" : "lg:w-80"
         } ${selectedId ? "hidden md:flex" : "flex"} ${
           fullscreen ? "md:hidden" : ""
-        } ${listSlidingIn ? "flow-slide-in-left" : ""}`}
+        } ${listSlidingIn ? "flow-slide-in-left" : ""} ${
+          listShift === "collapse"
+            ? "flow-list-shift-left"
+            : listShift === "expand"
+              ? "flow-list-shift-right"
+              : ""
+        }`}
       >
         <NoteList
           notes={visibleNotes}
@@ -568,7 +594,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             // モバイルのみドロワーを開く。md以上で立てると、暗幕（閉じる手段）が
             // md:hidden のため開きっぱなしの状態が残ってしまう
             if (isMobile()) setSidebarOpen(true);
-            setSidebarCollapsed(false); // md以上：最小化を解除
+            else expandSidebar(); // md以上：最小化を解除しつつ一覧を左→中央へ
           }}
         />
       </div>
