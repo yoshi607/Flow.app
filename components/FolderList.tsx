@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useNotes } from "@/lib/store";
+import { useDevice } from "@/lib/useDevice";
 import { type Folder } from "@/lib/types";
 import { type View } from "./Sidebar";
 import SwipeRow, { type SwipeAction } from "./SwipeRow";
@@ -24,6 +25,7 @@ export default function FolderList({
   rowClass: (active: boolean) => string;
 }) {
   const { folders, notes, renameFolder, deleteFolder, reorderFolders } = useNotes();
+  const { isTouch } = useDevice();
 
   const folderCount = (id: string) =>
     notes.filter((n) => n.status === "active" && n.folder_id === id).length;
@@ -165,6 +167,7 @@ export default function FolderList({
           <SwipeRow
             actions={actionsFor(f)}
             disabled={dragId === f.id}
+            compact
             contentClassName="rounded-2xl bg-brand-50 dark:bg-neutral-900"
           >
             <div className="group relative">
@@ -177,20 +180,33 @@ export default function FolderList({
                   if (draggingRef.current) return;
                   onChangeView({ type: "folder", folderId: f.id });
                 }}
-                onDoubleClick={() => promptRename(f)}
+                // ダブルタップでの名前変更は PC（非タッチ）のみ。
+                // タッチ端末は左スワイプの「名前変更」を使う。
+                onDoubleClick={isTouch ? undefined : () => promptRename(f)}
               >
                 <IconFolder className="h-4 w-4" />
                 <span className="flex-1 truncate">{f.name}</span>
-                <span className="text-xs text-neutral-400">{folderCount(f.id)}</span>
+                {/* 件数。PC ではホバー時に削除ボタンと重ならないよう消す */}
+                <span
+                  className={`text-xs text-neutral-400 transition-opacity ${
+                    isTouch ? "" : "group-hover:opacity-0"
+                  }`}
+                >
+                  {folderCount(f.id)}
+                </span>
               </button>
-              {/* PC 向け：ホバーで出る削除ボタン（従来どおり） */}
-              <button
-                onClick={() => confirmDelete(f)}
-                className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded p-1 text-neutral-400 hover:bg-brand-200 hover:text-red-600 group-hover:block dark:hover:bg-neutral-700"
-                title="フォルダを削除"
-              >
-                <IconTrash className="h-3.5 w-3.5" />
-              </button>
+              {/* PC 向け：ホバーで出る削除ボタン。タッチ端末では出さない
+                  （タップ時にホバー状態が残って件数と重なるため。タッチの削除は
+                  左スワイプの「削除」で行う）。 */}
+              {!isTouch && (
+                <button
+                  onClick={() => confirmDelete(f)}
+                  className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded p-1 text-neutral-400 hover:bg-brand-200 hover:text-red-600 group-hover:block dark:hover:bg-neutral-700"
+                  title="フォルダを削除"
+                >
+                  <IconTrash className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </SwipeRow>
         </div>

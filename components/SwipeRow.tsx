@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useDevice } from "@/lib/useDevice";
 
 export interface SwipeAction {
@@ -15,7 +21,8 @@ export interface SwipeAction {
   onClick: () => void;
 }
 
-const ACTION_WIDTH = 72; // 1アクションあたりの幅(px)
+const ACTION_WIDTH_NORMAL = 72; // 1アクションあたりの幅(px)
+const ACTION_WIDTH_COMPACT = 64; // 背の低い行（フォルダ一覧）向けの詰めた幅
 
 // --- トラックパッド(2本指スクロール)の効き具合。数値を上げるほど敏感になる ---
 // スクロール量に対して実際に開く量の比率（1.0 で等倍＝かなり敏感）
@@ -25,6 +32,11 @@ const WHEEL_AXIS_RATIO = 1.5;
 // 横に累計これだけ動くまでは開き始めない（触れただけで開かないための「あそび」）
 const WHEEL_START_PX = 30;
 
+// 開いている行は常に1つだけにする。別の行で横スワイプが始まったら、前に開いて
+// いた行を閉じる（＝スライドのアニメーションで元に戻す）。フォルダ一覧・メモ一覧
+// をまたいで単一にしたいので、モジュールレベルに1つだけ持つ。
+const openRegistry: { close: (() => void) | null } = { close: null };
+
 // 左スワイプで右側にアクション（共有・移動・削除など）を表示する行（⑥）。
 // タッチ端末でのみジェスチャーを有効化し、非タッチ端末では
 // そのまま children を表示する（右クリック等は各画面の別UIで対応）。
@@ -33,6 +45,9 @@ export default function SwipeRow({
   children,
   disabled = false,
   className = "",
+  // 背の低い行（フォルダ一覧）でアクションが枠からはみ出さないよう、
+  // アイコン・文字を一回り小さくした詰めた表示にする。
+  compact = false,
   // スワイプで動く前面の背景。背後のアクションを隠すため不透明である必要がある。
   // 置かれる場所の地色に合わせて差し替える（既定は本文一覧の白）。
   contentClassName = "bg-white dark:bg-neutral-950",
@@ -41,6 +56,7 @@ export default function SwipeRow({
   children: ReactNode;
   disabled?: boolean;
   className?: string;
+  compact?: boolean;
   contentClassName?: string;
 }) {
   const { isTouch } = useDevice();
@@ -56,7 +72,33 @@ export default function SwipeRow({
   const offsetRef = useRef(0);
   offsetRef.current = offset;
 
-  const openWidth = actions.length * ACTION_WIDTH;
+  const actionWidth = compact ? ACTION_WIDTH_COMPACT : ACTION_WIDTH_NORMAL;
+  const openWidth = actions.length * actionWidth;
+
+  // この行を閉じる（他の行から呼ばれても同じ）。インスタンスごとに安定させ、
+  // openRegistry の同一判定に使う。
+  const closeSelf = useCallback(() => setOffset(0), []);
+
+  // 横スワイプが始まったときに呼ぶ。前に開いていた別の行を閉じ、自分を登録する。
+  const beginOpen = useCallback(() => {
+    if (openRegistry.close && openRegistry.close !== closeSelf) {
+      openRegistry.close(); // 前の行をスライドで元に戻す
+    }
+    openRegistry.close = closeSelf;
+  }, [closeSelf]);
+
+  // 閉じ切ったら登録を外す。アンマウント時も同様（開いたまま消えた場合の掃除）。
+  useEffect(() => {
+    if (offset === 0 && openRegistry.close === closeSelf) {
+      openRegistry.close = null;
+    }
+  }, [offset, closeSelf]);
+  useEffect(
+    () => () => {
+      if (openRegistry.close === closeSelf) openRegistry.close = null;
+    },
+    [closeSelf],
+  );
 
   // トラックパッド（iPadのキーボード接続時など）の2本指・横スクロールでも
   // アクションを開けるようにする。指のスワイプは touch イベント側で処理。
@@ -77,6 +119,7 @@ export default function SwipeRow({
         offsetRef.current !== 0 || Math.abs(wheelAccum.current) > WHEEL_START_PX;
 
       if (engaged) {
+        beginOpen(); // 他の開いている行を閉じる
         let next = offsetRef.current - e.deltaX * WHEEL_SENSITIVITY;
         if (next > 0) next = 0;
         if (next < -openWidth) next = -openWidth;
@@ -102,7 +145,7 @@ export default function SwipeRow({
     // isTouch=false のため ref の付かない div が描画され、この effect は
     // rowRef.current=null で何もせず終わる。判定後に描画が切り替わった
     // タイミングで再実行しないと、wheel リスナーが永久に付かない。
-  }, [openWidth, isTouch, disabled]);
+  }, [openWidth, isTouch, disabled, beginOpen]);
 
   if (!isTouch || disabled || actions.length === 0) {
     return <div className={className}>{children}</div>;
@@ -123,6 +166,8 @@ export default function SwipeRow({
     if (axis.current === "none") {
       if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
       axis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      // 横スワイプと確定した瞬間に、前に開いていた別の行を閉じる
+      if (axis.current === "x") beginOpen();
     }
     if (axis.current !== "x") return;
     let next = start.current.base + dx;
@@ -139,17 +184,19 @@ export default function SwipeRow({
     setOffset(offset < -openWidth / 2 ? -openWidth : 0);
   }
 
-  const close = () => setOffset(0);
-
   // スワイプの開き具合（0〜1）。これに応じてアクションを小→大に見せる。
   const revealRatio = openWidth > 0 ? Math.min(1, Math.abs(offset) / openWidth) : 0;
 
-  // 各ボタンを「小さい状態から」スワイプ量に応じて現れさせる。
-  // 以前は右端（削除）から順に開始をずらしていた（stagger）が、共有・移動も
-  // 削除とまったく同じタイミング・同じ度合いで出るよう、ずらしは行わない。
-  const RAMP = 0.5; // ボタンが小→大になりきるまでの幅（スワイプ割合）
-  const actionStyle = () => {
-    const p = Math.max(0, Math.min(1, revealRatio / RAMP));
+  // 各ボタンを「小さい状態から」スワイプ量に応じて順番に現れさせる。
+  // 前面のコンテンツは不透明でボタンを覆っているため、スワイプで“覆いが外れた”
+  // ボタンから見えていく。右端（削除）が最初に外れ、手前のボタンほど後に外れる。
+  // そこで各ボタンは「自分の覆いが外れる区間」で小→大にせり上がるようにし、
+  // スワイプすると順番に・小さいものから大きく育って見えるようにする。
+  const n = actions.length;
+  const actionStyle = (i: number) => {
+    // i=0 が手前、i=n-1 が右端。右端(n-1)は revealRatio 0〜1/n で、
+    // 手前(0)は (n-1)/n〜1 で 0→1 になる。
+    const p = Math.max(0, Math.min(1, n * revealRatio - (n - 1 - i)));
     return {
       transform: `scale(${0.2 + 0.8 * p})`,
       opacity: p,
@@ -166,17 +213,25 @@ export default function SwipeRow({
     >
       {/* 背後のアクション（丸みのある四角ボタン）。スワイプ量に応じて拡大する */}
       <div className="absolute inset-y-0 right-0 flex">
-        {actions.map((a) => (
-          <div key={a.key} style={{ width: ACTION_WIDTH }} className="flex p-1">
+        {actions.map((a, i) => (
+          <div
+            key={a.key}
+            style={{ width: actionWidth }}
+            className={`flex ${compact ? "p-0.5" : "p-1"}`}
+          >
             <button
               onClick={() => {
-                if (!a.keepOpen) close();
+                if (!a.keepOpen) closeSelf();
                 a.onClick();
               }}
-              style={actionStyle()}
-              className={`flow-press flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.6rem] text-xs font-medium text-white ${a.className}`}
+              style={actionStyle(i)}
+              className={`flow-press flex flex-1 flex-col items-center justify-center font-medium text-white ${
+                compact
+                  ? "gap-0.5 rounded-xl text-[10px] leading-none"
+                  : "gap-1 rounded-[1.6rem] text-xs"
+              } ${a.className}`}
             >
-              <span className="h-5 w-5">{a.icon}</span>
+              <span className={compact ? "h-4 w-4" : "h-5 w-5"}>{a.icon}</span>
               {a.label}
             </button>
           </div>
@@ -197,7 +252,7 @@ export default function SwipeRow({
           if (offset !== 0) {
             e.preventDefault();
             e.stopPropagation();
-            close();
+            closeSelf();
           }
         }}
       >
