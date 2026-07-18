@@ -63,14 +63,24 @@ export default function LogoArrowDraw({
     }
 
     // iPad の PWA をホーム画面から「横向きで」起動すると、最初の数百 ms は
-    // ビューポートが縦向き寸法のまま描画され、その後 landscape へ補正されて
-    // レイアウトが飛ぶことがある。その最中に線を引き始めると、矢印が中央から
-    // ずれた位置で描かれてから中央へ瞬間移動して見える（実機で報告あり）。
+    // 起動ズーム／向き補正でレイアウトが安定せず、その最中に線を引き始めると、
+    // 矢印が中央からずれた位置で描かれてから中央へ瞬間移動して見える。
     //
-    // 線は「見え始める瞬間」＝描画開始なので、ビューポート寸法が数フレーム
-    // 変化しなくなる（＝レイアウトが安定する）まで開始を遅らせる。安定する
-    // までは背景（スプラッシュと同色）だけが見えるため、ずれた矢印は出ない。
-    // 通常の起動では最初から安定しているので、数フレーム（〜50ms）で始まる。
+    // 対策として、ビューポート寸法が数フレーム変化しなくなる（＝安定する）まで
+    // 描画開始を遅らせる。ただし寸法が変わらなくても“見た目の”起動ズームが
+    // 続いていることがあり、特に Wi-Fi を切った（オフライン）状態はキャッシュ
+    // から即起動してハイドレーションが速いため、寸法だけ見て早く描き始めると
+    // ズームの最中に描かれてズレる。そこでホーム画面PWA（standalone）のときは、
+    // 起動が収まるまでの「最低待ち時間」を必ず確保してから描き始める。
+    // 待っている間は背景（スプラッシュと同色）だけが見えるので、ずれた矢印は
+    // 出ない。通常のブラウザでは待たず、これまでどおり数フレームで始まる。
+    const standalone =
+      window.matchMedia?.("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone ===
+        true;
+    const MIN_MS = standalone ? 700 : 0; // 起動ズームが収まるまでの最低待ち
+    const MAX_MS = 1400; // それでも揺れ続ける場合に必ず開始する保険
+
     let raf = 0;
     let started = false;
     let stableFrames = 0;
@@ -85,9 +95,10 @@ export default function LogoArrowDraw({
         stableFrames = 0;
         lastSize = size;
       }
-      // 3フレーム連続で寸法が変わらなければ安定とみなす。
-      // 揺れ続けても最大 700ms で必ず開始する保険付き。
-      if (stableFrames >= 3 || Date.now() - t0 > 700) {
+      // 最低待ち時間を過ぎ、かつ寸法が3フレーム連続で変わらなければ開始。
+      // それでも揺れ続ける場合は MAX_MS で必ず開始する。
+      const elapsed = Date.now() - t0;
+      if (elapsed >= MAX_MS || (elapsed >= MIN_MS && stableFrames >= 3)) {
         started = true;
         setPhase("drawing"); // この瞬間に @keyframes が走り出す
       } else {

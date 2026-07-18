@@ -29,6 +29,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  // PWA の「別ウィンドウで開く」で右側にドック（固定表示）するメモの id。
+  // OS の別ウィンドウが作れないぶん、画面内を左右に分割して両方を見せる。
+  const [dockedId, setDockedId] = useState<string | null>(null);
   // 戻るアニメーション再生中（モバイル）
   const [closing, setClosing] = useState(false);
   // ＋ボタンから作った直後のメモ。一覧で「ぽんっ」と出す演出に使う
@@ -263,6 +266,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   }, [notes, folders, view, query]);
 
   const selectedNote = notes.find((n) => n.id === selectedId) ?? null;
+  const dockedNote = notes.find((n) => n.id === dockedId) ?? null;
 
   function changeView(v: View) {
     setView(v);
@@ -407,24 +411,41 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone ===
         true;
-    if (standalone) {
-      // PWA では popup=... のウィンドウ機能を付けると OS に無視・ブロックされて
-      // 開けないことがある。機能指定なしで開くと、同一Webアプリの新しい
-      // ウィンドウとして（ログインを保ったまま）開ける。
-      window.open(`/note/${id}`, "_blank");
-    } else {
-      // PC のブラウザ（ウェブ）：画面いっぱいの独立ウィンドウ。幅・高さを
-      // 指定すると、タブではなく別ウィンドウとして開く。
-      const w = window.screen.availWidth;
-      const h = window.screen.availHeight;
-      window.open(
-        `/note/${id}`,
-        `flow-note-${id}`,
-        `popup=yes,width=${w},height=${h},left=0,top=0`,
-      );
+    // 左右分割は横幅に余裕がある時（≒ iPad 横向き以上）だけにする。
+    // 縦向き iPad などでは半分ずつだと窮屈なため対象外。
+    const wideEnough =
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 1024px)").matches;
+
+    if (standalone && wideEnough) {
+      // ホーム画面PWAでは独立した別ウィンドウを作れない（OS制約）。そこで画面内を
+      // 左右に分割し、このメモを右側にドック（固定表示）する。左側はこれまでどおり
+      // Flow を操作できる。左側の幅を確保するためフォルダ一覧は畳んでおく
+      // （フォルダは一覧ヘッダーの☰から開ける）。
+      setDockedId(id);
+      setSelectedId(null);
+      setFullscreen(false);
+      setSidebarCollapsed(true);
+      return;
     }
+
+    if (standalone) {
+      // 狭い画面（iPhone・縦向きiPad等）のPWAは左右分割が窮屈なため、従来どおり開く。
+      window.open(`/note/${id}`, "_blank");
+      closeEditor();
+      return;
+    }
+
+    // PC のブラウザ（ウェブ）：画面いっぱいの独立した別ウィンドウで開く。
+    // 幅・高さを指定すると、タブではなく別ウィンドウとして開く。
+    const w = window.screen.availWidth;
+    const h = window.screen.availHeight;
+    window.open(
+      `/note/${id}`,
+      `flow-note-${id}`,
+      `popup=yes,width=${w},height=${h},left=0,top=0`,
+    );
     // 元のウィンドウはメモを閉じ、Flow の一覧（新しい Flow 画面）に戻す。
-    // これで「メモを別ウィンドウで全画面表示しつつ、こちらで Flow を使う」ができる。
     closeEditor();
   }
 
@@ -439,6 +460,16 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
     >
+      {/* ドック時（PWAの「別ウィンドウで開く」）は画面を左右に分割し、この
+          ラッパー＝左側に通常の Flow を、右側にドックしたメモを表示する。
+          非ドック時は display:contents で従来どおり（レイアウト影響なし）。 */}
+      <div
+        className={
+          dockedNote
+            ? "relative flex min-w-0 flex-1 lg:flex-none lg:w-1/2"
+            : "contents"
+        }
+      >
       {/* サイドバー（モバイルはドロワー / md以上は最小化可能 / 全画面時は非表示）
           ※最小化の幅変化（md:w-64↔md:w-0）は「即時」にしている（transition なし）。
             幅を連続アニメーションすると右のエディタ幅が毎フレーム変わり、本文が
@@ -580,6 +611,19 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
         )}
       </div>
       </div>
+      </div>
+
+      {/* 右側：ドックしたメモ（lg以上＝横向きで左右分割）。左上の X で解除して通常表示に戻る。 */}
+      {dockedNote && (
+        <div className="hidden min-w-0 flex-col border-l border-brand-200/60 dark:border-neutral-800 lg:flex lg:w-1/2">
+          <NoteEditor
+            key={dockedNote.id}
+            note={dockedNote}
+            standalone
+            onBack={() => setDockedId(null)}
+          />
+        </div>
+      )}
 
       {settingsOpen && (
         <SettingsDialog
