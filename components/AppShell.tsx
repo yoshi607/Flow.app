@@ -501,6 +501,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   const dragging = dragX !== null || backX !== null;
 
+  // 右ドックの「開いたときの幅」。ルート左右の p-2(=16px) と中央 gap-2(=8px) を
+  // 引いた残りを左右で二等分した値。外枠(開いた幅)と中身(常にこの固定幅)で同じ
+  // 値を使うので、開き切ったとき両者がピタリ一致し、本文の左端が欠けない。
+  // 100vw ベースなので回転・ウィンドウ幅変化に CSS だけで即追従する（JS不要）。
+  const dockWidth = "calc((100vw - 24px) / 2)";
+
   return (
     <div
       ref={rootRef}
@@ -692,24 +698,27 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       </div>
 
       {/* ドックしたメモ。横向き(wide)＝右半分の丸角パネル、縦向き＝全画面。
-          横画面では「右端固定・左端が伸縮」で幅を 0↔50% に変化させて開閉する
-          （スライドではなく幅アニメ）。右端はフレックス末尾なので常に画面右端に
-          張り付き、左隣の Flow(flex-1) がその分だけ滑らかに伸縮する。
-          transition は開閉中(dockAnimating)だけ効かせるので、回転やウィンドウ幅の
-          変化には即時追従する（カクつき防止に per-frame の JS は使わず CSS 任せ）。
-          左上の × で解除して通常表示に戻る。回転してもクラスが変わるだけなので、
-          メモ本文はマウントされたまま維持される。 */}
+          【横画面の開閉】スライドは使わず、外枠の width だけを 0↔半分 に伸縮させる。
+          外枠はフレックス末尾なので右端は常に画面右端に固定され、左端だけが動く。
+          中身(本文)は常に「開いたときの幅(dockWidth)」で固定し、外枠の右端に貼り
+          付けて overflow で見せ隠しする。よって本文は一切動かず・折り返しも起きず、
+          外枠の幅が変わることで「その場で表れる/隠れる」（3ペインの一覧最小化と
+          同じ質感）。transform は使わない。
+          transition は開閉中(dockAnimating)だけ効かせるので、回転（縦⇔横）や
+          ウィンドウ幅変化には即時追従（アニメ無し）。幅は 100vw ベースの CSS な
+          ので per-frame の JS は不要でカクつかない。回転してもクラスが変わるだけ
+          で本文はマウントされたまま維持される。 */}
       {dockedNote && (
         <div
           className={
             wide
-              ? "flex min-w-0 shrink-0 flex-col overflow-hidden rounded-2xl bg-white dark:bg-neutral-950"
+              ? "relative flex shrink-0 overflow-hidden rounded-2xl bg-white dark:bg-neutral-950"
               : "flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950"
           }
           style={
             wide
               ? {
-                  width: dockOpen ? "50%" : "0%",
+                  width: dockOpen ? dockWidth : "0px",
                   transition: dockAnimating
                     ? "width 260ms ease-in-out"
                     : "none",
@@ -717,12 +726,21 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
               : undefined
           }
         >
-          <NoteEditor
-            key={dockedNote.id}
-            note={dockedNote}
-            standalone
-            onBack={closeDock}
-          />
+          <div
+            className={
+              wide
+                ? "absolute inset-y-0 right-0 flex flex-col"
+                : "flex min-w-0 flex-1 flex-col"
+            }
+            style={wide ? { width: dockWidth } : undefined}
+          >
+            <NoteEditor
+              key={dockedNote.id}
+              note={dockedNote}
+              standalone
+              onBack={closeDock}
+            />
+          </div>
         </div>
       )}
 
