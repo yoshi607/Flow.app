@@ -345,7 +345,7 @@ body {
 }
 .flow-dock-pop {
   transform-origin: bottom center;
-  animation: flow-dock-pop 340ms var(--ease-out) backwards;
+  animation: flow-dock-pop 640ms var(--ease-out) backwards;
 }
 
 /* 指で戻している最中は、指の位置に完全同期させる（アニメーションを止める） */

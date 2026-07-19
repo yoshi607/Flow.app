@@ -462,7 +462,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       setSidebarCollapsed(true);
       setDockClosing(false);
       setDockPop(true);
-      window.setTimeout(() => setDockPop(false), 380);
+      // アニメ(.flow-dock-pop=640ms)完了後にクラスを外す。途中で外すと中断して
+      // ガクッと最終状態へ飛ぶため、必ずアニメ長より後にする。
+      window.setTimeout(() => setDockPop(false), 700);
       return;
     }
 
@@ -497,23 +499,25 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     window.setTimeout(() => {
       setDockedId(null);
       setDockClosing(false);
-    }, 280);
+    }, 80);
   }
 
   const dragging = dragX !== null || backX !== null;
 
-  // 右ドックの「開いたときの幅」。ルート左右の p-2(=16px) と中央 gap-2(=8px) を
-  // 引いた残りを左右で二等分した値。外枠(開いた幅)と中身(常にこの固定幅)で同じ
-  // 値を使うので、開き切ったとき両者がピタリ一致し、本文の左端が欠けない。
-  const dockWidth = "calc((100vw - 24px) / 2)";
+  // 右ドックの「開いたときの幅」。外周の余白は無く中央 gap-2(=8px) だけなので、
+  // 画面幅から gap を引いた残りを左右で二等分した値。外枠(開いた幅)と中身(常に
+  // この固定幅)で同じ値を使うので、開き切ったとき両者がピタリ一致し左端が欠けない。
+  const dockWidth = "calc((100vw - 8px) / 2)";
 
   return (
     <div
       ref={rootRef}
       className={`h-app-screen flex overflow-hidden ${
         dockedNote && wide
-          ? // 左右分割：中央にやや太い線（＝この地色の隙間）＋左右を丸角パネルに
-            "gap-2 bg-brand-200/70 p-2 dark:bg-neutral-800"
+          ? // 左右分割：外周は画面端まで（余白なし＝端の角丸は端末のiPad Pro形状に
+            // 任せる）、中央のみ隙間を空けて区切り線にする（隙間は右ドックの
+            // margin-left で作り、閉じるときに 0 へ縮めて左を端まで伸ばし切る）。
+            "bg-brand-200/70 dark:bg-neutral-800"
           : "bg-brand-50 dark:bg-neutral-950"
       }`}
       onTouchStart={onTouchStart}
@@ -532,7 +536,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             : wide
               ? `${
                   dockPop ? "flow-dock-pop " : ""
-                }relative flex min-w-0 flex-1 overflow-hidden rounded-2xl bg-brand-50 dark:bg-neutral-950`
+                }relative flex min-w-0 flex-1 overflow-hidden rounded-r-[18px] bg-brand-50 dark:bg-neutral-950`
               : "hidden"
         }
       >
@@ -711,7 +715,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
             wide
               ? `${
                   dockPop ? "flow-dock-pop " : ""
-                }relative flex shrink-0 overflow-hidden rounded-2xl bg-white dark:bg-neutral-950`
+                }relative flex shrink-0 overflow-hidden rounded-l-[18px] bg-white dark:bg-neutral-950`
               : `${
                   dockPop ? "flow-dock-pop " : ""
                 }flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950`
@@ -719,9 +723,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           style={
             wide
               ? {
+                  // 中央の区切り隙間はこの margin-left で作る。閉じるときは幅と
+                  // 一緒に 0 へ縮め、左側を画面端まで伸ばし切る（隙間を残さない）。
                   width: dockClosing ? "0px" : dockWidth,
+                  marginLeft: dockClosing ? "0px" : "8px",
                   transition: dockClosing
-                    ? "width 260ms ease-in-out"
+                    ? "width 60ms ease-in-out, margin-left 60ms ease-in-out"
                     : "none",
                 }
               : undefined

@@ -177,8 +177,9 @@ export default function NoteList({
 
   return (
     <div className="flex h-full flex-col bg-white/70 backdrop-blur-xl dark:bg-neutral-950">
-      {/* ヘッダー */}
-      <div className="safe-top flex items-center gap-2 px-3 pt-3">
+      {/* ヘッダー（☰・タイトル・＋を少しだけ下げて視覚的に揃える。transform なので
+          下の検索欄などのレイアウトには影響しない） */}
+      <div className="safe-top flex translate-y-[2px] items-center gap-2 px-3 pt-3">
         {/* モバイル：ドロワーを開く / md以上：最小化中のみ表示してフォルダを再表示 */}
         <button
           onClick={onOpenMenu}
