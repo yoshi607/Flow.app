@@ -106,9 +106,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     return () => window.clearTimeout(t);
   }, []);
 
-  // ドックを開いた瞬間だけ、左右パネルを「下端を起点に下から上へ伸び広がる」演出で
-  // 出す。scaleY を主役にして“形が下から生えて広がる”物理的な印象を出し、不透明度の
-  // 変化は控えめ（0.6→1）にする。下端固定（transform-origin: bottom）なので上へ伸びる。
+  // ドックを開いた瞬間だけ、左右パネルを「iPad のアプリ起動」のように、それぞれの
+  // 下端中心を起点に下から上へ大きく広がって開く演出で出す。uniform scale(0.6→1) を
+  // 主役にして“下中心から生えて広がる”印象をしっかり出し、時間も長め・強めの
+  // ease-out（起動アニメ風の減速）にする。不透明度の変化は控えめ（0.6→1）で脇役。
   // 左パネルは display:contents→flex に切り替わる要素で CSS アニメが安定発火しない
   // ことがあるため、WAAPI で左右まとめて確実に・同時に再生する。paint 前(layout
   // effect)に開始するのでチラつかない。回転やレイアウト変化では再生しない
@@ -126,12 +127,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       el.style.transformOrigin = "bottom center";
       el.animate(
         [
-          { transform: "scaleY(0.7)", opacity: 0.6 },
-          { transform: "scaleY(1)", opacity: 1 },
+          { transform: "scale(0.6)", opacity: 0.6 },
+          { transform: "scale(1)", opacity: 1 },
         ],
         {
-          duration: 640,
-          easing: "cubic-bezier(0.22, 0.61, 0.36, 1)",
+          duration: 820,
+          easing: "cubic-bezier(0.16, 1, 0.3, 1)",
           fill: "none",
         },
       );
