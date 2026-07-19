@@ -107,7 +107,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   }, []);
 
   // ドックを開いた瞬間だけ、左右パネルを「iPad のアプリ起動」のように、それぞれの
-  // 下端中心を起点に下から上へ大きく広がって開く演出で出す。uniform scale(0.6→1) を
+  // 下端中心を起点に下から上へ大きく広がって開く演出で出す。uniform scale(0.4→1) を
   // 主役にして“下中心から生えて広がる”印象をしっかり出し、時間も長め・強めの
   // ease-out（起動アニメ風の減速）にする。不透明度の変化は控えめ（0.6→1）で脇役。
   // 左パネルは display:contents→flex に切り替わる要素で CSS アニメが安定発火しない
@@ -127,7 +127,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       el.style.transformOrigin = "bottom center";
       el.animate(
         [
-          { transform: "scale(0.6)", opacity: 0.6 },
+          { transform: "scale(0.4)", opacity: 0.6 },
           { transform: "scale(1)", opacity: 1 },
         ],
         {
