@@ -24,7 +24,13 @@ interface NotesContextValue {
   loading: boolean;
   userId: string;
   createNote: (partial?: Partial<Note>) => Promise<Note | null>;
-  updateNote: (id: string, patch: Partial<Note>, immediate?: boolean) => void;
+  updateNote: (
+    id: string,
+    patch: Partial<Note>,
+    immediate?: boolean,
+    // false にすると編集日時(updated_at)を更新しない（ピン留めなど）。
+    touch?: boolean,
+  ) => void;
   setNoteType: (id: string, type: NoteType) => void;
   togglePin: (id: string) => void;
   trashNote: (id: string) => void;
@@ -187,15 +193,25 @@ export function NotesProvider({
     };
   }, [supabase, userId, refresh, keepLocal]);
 
-  // ローカル状態を1件更新
-  const patchLocal = useCallback((id: string, patch: Partial<Note>) => {
-    lastEditedAt.current[id] = Date.now();
-    setNotes((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, ...patch, updated_at: new Date().toISOString() } : n,
-      ),
-    );
-  }, []);
+  // ローカル状態を1件更新。touch=false のときは編集日時(updated_at)を据え置く
+  // （ピン留めなど、内容の編集ではない操作向け）。
+  const patchLocal = useCallback(
+    (id: string, patch: Partial<Note>, touch = true) => {
+      lastEditedAt.current[id] = Date.now();
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === id
+            ? {
+                ...n,
+                ...patch,
+                ...(touch ? { updated_at: new Date().toISOString() } : {}),
+              }
+            : n,
+        ),
+      );
+    },
+    [],
+  );
 
   // DB へ保存（デバウンスされた差分をまとめて）
   const flushSave = useCallback(
@@ -254,8 +270,8 @@ export function NotesProvider({
   }, [flushAll]);
 
   const updateNote = useCallback(
-    (id: string, patch: Partial<Note>, immediate = false) => {
-      patchLocal(id, patch);
+    (id: string, patch: Partial<Note>, immediate = false, touch = true) => {
+      patchLocal(id, patch, touch);
       pendingPatches.current[id] = { ...pendingPatches.current[id], ...patch };
       if (saveTimers.current[id]) clearTimeout(saveTimers.current[id]);
       if (immediate) {
@@ -316,7 +332,9 @@ export function NotesProvider({
     (id: string) => {
       const note = notes.find((n) => n.id === id);
       if (!note) return;
-      updateNote(id, { pinned: !note.pinned }, true);
+      // ピン留めは編集日時を更新しない（touch=false）。DB 側もトリガーで据え置く
+      // （supabase/migrations/0005_pin_preserve_updated_at.sql）。
+      updateNote(id, { pinned: !note.pinned }, true, false);
     },
     [notes, updateNote],
   );

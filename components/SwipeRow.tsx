@@ -23,7 +23,10 @@ export interface SwipeAction {
 
 const ACTION_WIDTH_NORMAL = 72; // 1アクションあたりの幅(px)
 const ACTION_WIDTH_COMPACT = 64; // 背の低い行（フォルダ一覧）向けの詰めた幅
-const LEAD_WIDTH = 96; // 右スワイプで出るリーディングアクション（ピン留め）の幅。少し横長。
+const LEAD_WIDTH = 192; // 右スワイプで出るリーディングアクション（ピン留め）の幅。横長。
+// 右へ「振り切った（行幅分いっぱいまでスワイプ）」とみなす割合。これを超えたら
+// ボタンを押さなくても実行する。
+const LEAD_COMMIT_RATIO = 0.9;
 
 // --- トラックパッド(2本指スクロール)の効き具合。数値を上げるほど敏感になる ---
 // スクロール量に対して実際に開く量の比率（1.0 で等倍＝かなり敏感）
@@ -151,7 +154,7 @@ export default function SwipeRow({
           // ボタンを表示した状態でスナップ、浅ければ閉じる。
           const rowW = rowRef.current?.offsetWidth ?? 0;
           const lead = leadingActionRef.current;
-          if (lead && cur >= rowW * 0.5) {
+          if (lead && cur >= rowW * LEAD_COMMIT_RATIO) {
             setOffset(0);
             lead.onClick();
           } else {
@@ -216,7 +219,7 @@ export default function SwipeRow({
       // 右スワイプ：しきり（行幅の半分超）ならボタンを押さず実行、そうでなければ
       // ボタンを表示した状態でスナップ、浅ければ閉じる。
       const rowW = rowRef.current?.offsetWidth ?? 0;
-      if (leadingAction && offset >= rowW * 0.5) {
+      if (leadingAction && offset >= rowW * LEAD_COMMIT_RATIO) {
         setOffset(0);
         leadingAction.onClick();
       } else {
