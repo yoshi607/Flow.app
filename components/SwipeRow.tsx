@@ -48,7 +48,7 @@ const SPRING_C = 30;
 // (targetX)へこの割合だけ近づける。1 に近いほど吸い付き、低いほど滑らか（ただし
 // 遅れて見える）。60fps 1フレームあたりの追従率として扱い、実 fps に依らず一定に
 // なるよう dt で正規化する。
-const SMOOTHING_FACTOR = 0.4;
+const SMOOTHING_FACTOR = 0.35;
 
 // --- トラックパッド(2本指スクロール) ---
 const WHEEL_SENSITIVITY = 0.4;
@@ -280,10 +280,13 @@ export default function SwipeRow({
   }, [closeSelf]);
 
   // 指/トラックパッドを離した/止めたときのスナップ判定（touch・wheel 共通）。
-  // base=ジェスチャー開始位置, cur=現在の表示位置, v=フリック判定用の速度,
-  // springV=バネ初速。開いていた状態からのスワイプは反対側を出さず、必ずリストへ
-  // 戻す（＝閉じ方向に少しでも動いた/フリックしたら 0 へ、そうでなければ元の開位置へ）。
-  const settle = (base: number, cur: number, v: number, springV: number) => {
+  // base=ジェスチャー開始位置, pos=指の最終位置（＝生座標 targetRef。表示位置ではない）,
+  // v=フリック判定用の速度, springV=バネ初速。判定は「表示位置」ではなく「指の実際の
+  // 位置」で行う：なめし係数が低いと表示が指に追いつく前に離すため、表示位置で距離を
+  // 測ると実際の指の移動量を大幅に過小評価し、閉じ操作が閾値に届かず開き側へ戻る
+  // （少しのスライドで逆側に動いて見える）。バネの開始位置は従来どおり表示位置なので
+  // 見た目の連続性は保たれる。開いていた状態からは反対側を出さず必ずリストへ戻す。
+  const settle = (base: number, pos: number, v: number, springV: number) => {
     const rowW = rowWidthRef.current;
     const wasZone = committingRef.current;
     committingRef.current = false;
@@ -292,7 +295,7 @@ export default function SwipeRow({
       // 開いていた状態から：反対側へは越えられない（0 にクランプ済み）。閉じ方向へ
       // 少しでも動いた/フリックしたら必ずリストへ戻す。動きが小さければ元の開位置へ。
       const openLeft = base < 0;
-      const towardClose = openLeft ? cur - base : base - cur; // 閉じ方向へ動いた量(px)
+      const towardClose = openLeft ? pos - base : base - pos; // 閉じ方向へ動いた量(px)
       const flickClose = openLeft ? v > FLICK_VELOCITY : v < -FLICK_VELOCITY;
       const openPos = openLeft ? -openWidth : leadWidth;
       springTo(towardClose > 20 || flickClose ? 0 : openPos, springV);
@@ -300,13 +303,13 @@ export default function SwipeRow({
     }
 
     // 閉じた状態から：左右どちらへも開ける
-    if (cur > 0) {
+    if (pos > 0) {
       const lead = leadingActionRef.current;
       // ピン留め確定：距離が振り切り閾値を超えた（or 振り切りゾーン滞在）か、
       // 距離が閾値未満でも速い右フリックなら確定。距離だけを唯一の条件にしない。
       if (
         lead &&
-        (wasZone || cur >= rowW * LEAD_COMMIT_RATIO || v >= LEAD_COMMIT_VELOCITY)
+        (wasZone || pos >= rowW * LEAD_COMMIT_RATIO || v >= LEAD_COMMIT_VELOCITY)
       ) {
         springTo(0, springV); // 振り切り/フリック → 実行してスナップで戻す
         lead.onClick();
@@ -315,14 +318,14 @@ export default function SwipeRow({
       let target: number;
       if (v > FLICK_VELOCITY) target = leadWidth;
       else if (v < -FLICK_VELOCITY) target = 0;
-      else target = cur >= leadWidth / 2 ? leadWidth : 0;
+      else target = pos >= leadWidth / 2 ? leadWidth : 0;
       springTo(target, springV);
       return;
     }
     let target: number;
     if (v < -FLICK_VELOCITY) target = -openWidth;
     else if (v > FLICK_VELOCITY) target = 0;
-    else target = cur <= -openWidth / 2 ? -openWidth : 0;
+    else target = pos <= -openWidth / 2 ? -openWidth : 0;
     springTo(target, springV);
   };
   const settleRef = useRef(settle);
@@ -382,10 +385,11 @@ export default function SwipeRow({
         wheelAccum.current = 0;
         draggingRef.current = false; // なめしループを止める
         // touch と同じスナップ判定に集約。開始位置を base に渡すことで、開いていた
-        // 状態からのスクロールは必ずリストへ戻す（反対側は出さない）。
+        // 状態からのスクロールは必ずリストへ戻す（反対側は出さない）。位置判定は
+        // 指の実際の到達点(targetRef)で（表示位置は遅れるため）。
         settleRef.current(
           wheelBaseRef.current,
-          offsetRef.current,
+          targetRef.current,
           dispVelRef.current,
           dispVelRef.current,
         );
@@ -466,8 +470,9 @@ export default function SwipeRow({
     }
     axis.current = "none";
     draggingRef.current = false; // なめしループを止めてバネへ
+    // スナップ判定は指の実際の位置(targetRef)で行う（表示位置は係数が低いと遅れる）。
     // フリック判定は指の速度、バネ初速は表示位置の速度（自然な引き継ぎ）を使う。
-    settle(start.current.base, offsetRef.current, vel.current.v, dispVelRef.current);
+    settle(start.current.base, targetRef.current, vel.current.v, dispVelRef.current);
   }
 
   // 初期 style（再レンダー時にこの静止位置で描く。以後の動きは applyOffset が上書き）。
