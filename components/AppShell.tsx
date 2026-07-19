@@ -106,11 +106,13 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     return () => window.clearTimeout(t);
   }, []);
 
-  // ドックを開いた瞬間だけ、左右パネルを「下から拡大しながら現れる」演出で出す。
-  // 左パネルは display:contents→flex に切り替わる要素で、CSSアニメが安定して
-  // 発火しないことがあるため、WAAPI で左右まとめて確実に・同時に再生する。
-  // paint 前（layout effect）に開始するので初期状態のチラつきが出ない。
-  // 回転やレイアウト変化では再生しない（dockedId が変わったときだけ発火）。
+  // ドックを開いた瞬間だけ、左右パネルを「下端を起点に下から上へ伸び広がる」演出で
+  // 出す。scaleY を主役にして“形が下から生えて広がる”物理的な印象を出し、不透明度の
+  // 変化は控えめ（0.6→1）にする。下端固定（transform-origin: bottom）なので上へ伸びる。
+  // 左パネルは display:contents→flex に切り替わる要素で CSS アニメが安定発火しない
+  // ことがあるため、WAAPI で左右まとめて確実に・同時に再生する。paint 前(layout
+  // effect)に開始するのでチラつかない。回転やレイアウト変化では再生しない
+  // （dockedId が変わったときだけ発火）。
   useIsoLayoutEffect(() => {
     if (!dockedId) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -124,8 +126,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       el.style.transformOrigin = "bottom center";
       el.animate(
         [
-          { transform: "translateY(16px) scale(0.94)", opacity: 0 },
-          { transform: "translateY(0) scale(1)", opacity: 1 },
+          { transform: "scaleY(0.7)", opacity: 0.6 },
+          { transform: "scaleY(1)", opacity: 1 },
         ],
         {
           duration: 640,
