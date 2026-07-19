@@ -44,12 +44,15 @@ const SPRING_C = 30;
 // (targetX)へこの割合だけ近づける。1 に近いほど吸い付き、低いほど滑らか（ただし
 // 遅れて見える）。60fps 1フレームあたりの追従率として扱い、実 fps に依らず一定に
 // なるよう dt で正規化する。
-const SMOOTHING_FACTOR = 0.7;
+const SMOOTHING_FACTOR = 0.6;
 
 // --- トラックパッド(2本指スクロール) ---
 const WHEEL_SENSITIVITY = 0.4;
 const WHEEL_AXIS_RATIO = 1.5;
 const WHEEL_START_PX = 30;
+// スクロールが止まったとみなすまでの待ち時間。短いと連続スライドの途中の一瞬の
+// 間（momentum の谷）で「ジェスチャー終了」と誤判定してスナップ→カクつく。
+const WHEEL_IDLE_MS = 240;
 
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
@@ -113,6 +116,7 @@ export default function SwipeRow({
   const rowWidthRef = useRef(0); // ジェスチャー開始時にキャッシュした行幅
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wheelAccum = useRef(0);
+  const wheelBaseRef = useRef(0); // wheel ジェスチャー開始時の位置（反対側へ越えさせない判定用）
   const leadingActionRef = useRef(leadingAction);
   leadingActionRef.current = leadingAction;
 
@@ -258,6 +262,50 @@ export default function SwipeRow({
     openRegistry.close = closeSelf;
   }, [closeSelf]);
 
+  // 指/トラックパッドを離した/止めたときのスナップ判定（touch・wheel 共通）。
+  // base=ジェスチャー開始位置, cur=現在の表示位置, v=フリック判定用の速度,
+  // springV=バネ初速。開いていた状態からのスワイプは反対側を出さず、必ずリストへ
+  // 戻す（＝閉じ方向に少しでも動いた/フリックしたら 0 へ、そうでなければ元の開位置へ）。
+  const settle = (base: number, cur: number, v: number, springV: number) => {
+    const rowW = rowWidthRef.current;
+    const wasZone = committingRef.current;
+    committingRef.current = false;
+
+    if (base !== 0) {
+      // 開いていた状態から：反対側へは越えられない（0 にクランプ済み）。閉じ方向へ
+      // 少しでも動いた/フリックしたら必ずリストへ戻す。動きが小さければ元の開位置へ。
+      const openLeft = base < 0;
+      const towardClose = openLeft ? cur - base : base - cur; // 閉じ方向へ動いた量(px)
+      const flickClose = openLeft ? v > FLICK_VELOCITY : v < -FLICK_VELOCITY;
+      const openPos = openLeft ? -openWidth : leadWidth;
+      springTo(towardClose > 20 || flickClose ? 0 : openPos, springV);
+      return;
+    }
+
+    // 閉じた状態から：左右どちらへも開ける
+    if (cur > 0) {
+      const lead = leadingActionRef.current;
+      if (lead && (wasZone || cur >= rowW * LEAD_COMMIT_RATIO)) {
+        springTo(0, springV); // 振り切り → 実行してスナップで戻す
+        lead.onClick();
+        return;
+      }
+      let target: number;
+      if (v > FLICK_VELOCITY) target = leadWidth;
+      else if (v < -FLICK_VELOCITY) target = 0;
+      else target = cur >= leadWidth / 2 ? leadWidth : 0;
+      springTo(target, springV);
+      return;
+    }
+    let target: number;
+    if (v < -FLICK_VELOCITY) target = -openWidth;
+    else if (v > FLICK_VELOCITY) target = 0;
+    else target = cur <= -openWidth / 2 ? -openWidth : 0;
+    springTo(target, springV);
+  };
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
+
   // 再レンダー後、DOM を現在の offsetRef に合わせ直す（ドラッグ/バネの最中に親が
   // 再レンダーしても位置が飛ばないための保険）。paint 前に実行。静止（0）なら
   // JSX の初期 style で正しいので書き込まない（一覧再レンダー時に全行へ書かない）。
@@ -291,11 +339,16 @@ export default function SwipeRow({
         // 生座標を targetRef に積むだけ。表示更新はなめしループが行う。
         if (!draggingRef.current) {
           targetRef.current = offsetRef.current;
+          wheelBaseRef.current = offsetRef.current; // このジェスチャーの開始位置
           rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
           startDragLoop();
         }
         const rowW = rowWidthRef.current;
+        const base = wheelBaseRef.current;
         let next = targetRef.current - e.deltaX * WHEEL_SENSITIVITY;
+        // 開いていた状態からのスクロールは反対側へ越えさせない（0 でクランプ）。
+        if (base < 0 && next > 0) next = 0;
+        if (base > 0 && next < 0) next = 0;
         const maxRight = leadingActionRef.current ? rowW : 0;
         if (next > maxRight) next = maxRight;
         if (next < -openWidth) next = -openWidth;
@@ -306,22 +359,15 @@ export default function SwipeRow({
       wheelTimer.current = setTimeout(() => {
         wheelAccum.current = 0;
         draggingRef.current = false; // なめしループを止める
-        const cur = offsetRef.current;
-        const rowW = rowWidthRef.current;
-        const wasZone = committingRef.current;
-        committingRef.current = false;
-        if (cur > 0) {
-          const lead = leadingActionRef.current;
-          if (lead && (wasZone || cur >= rowW * LEAD_COMMIT_RATIO)) {
-            springTo(0, 0);
-            lead.onClick();
-          } else {
-            springTo(cur >= leadWidth / 2 ? leadWidth : 0, 0);
-          }
-        } else {
-          springTo(cur <= -openWidth / 2 ? -openWidth : 0, 0);
-        }
-      }, 140);
+        // touch と同じスナップ判定に集約。開始位置を base に渡すことで、開いていた
+        // 状態からのスクロールは必ずリストへ戻す（反対側は出さない）。
+        settleRef.current(
+          wheelBaseRef.current,
+          offsetRef.current,
+          dispVelRef.current,
+          dispVelRef.current,
+        );
+      }, WHEEL_IDLE_MS);
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -329,7 +375,7 @@ export default function SwipeRow({
       el.removeEventListener("wheel", onWheel);
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
     };
-  }, [openWidth, leadWidth, isTouch, disabled, beginOpen, startDragLoop, springTo]);
+  }, [openWidth, leadWidth, isTouch, disabled, beginOpen, startDragLoop]);
 
   if (!isTouch || disabled || (actions.length === 0 && !leadingAction)) {
     return <div className={className}>{children}</div>;
@@ -368,6 +414,10 @@ export default function SwipeRow({
     // なめしループが 1フレーム1回だけ行う。
     let next = start.current.base + dx;
     const rowW = rowWidthRef.current;
+    // 開いていた状態からのスワイプは反対側へ越えさせない（0 でクランプ）。
+    // ＝1回のスライドでは「リストへ戻る」までで、反対側のボタンは出さない。
+    if (start.current.base < 0 && next > 0) next = 0;
+    if (start.current.base > 0 && next < 0) next = 0;
     if (next > 0) {
       if (!hasLead) next = next * 0.2;
       else if (next > rowW) next = rowW + (next - rowW) * 0.2;
@@ -394,36 +444,8 @@ export default function SwipeRow({
     }
     axis.current = "none";
     draggingRef.current = false; // なめしループを止めてバネへ
-    const rowW = rowWidthRef.current;
     // フリック判定は指の速度、バネ初速は表示位置の速度（自然な引き継ぎ）を使う。
-    const v = vel.current.v; // px/ms（右が正）
-    const springV = dispVelRef.current;
-    const cur = offsetRef.current;
-    const wasZone = committingRef.current;
-    committingRef.current = false;
-
-    if (cur > 0) {
-      // 右スワイプ
-      const lead = leadingAction;
-      if (lead && (wasZone || cur >= rowW * LEAD_COMMIT_RATIO)) {
-        springTo(0, springV); // 振り切り → 実行してその場でスナップして戻す
-        lead.onClick();
-        return;
-      }
-      let target: number;
-      if (v > FLICK_VELOCITY) target = leadWidth;
-      else if (v < -FLICK_VELOCITY) target = 0;
-      else target = cur >= leadWidth / 2 ? leadWidth : 0;
-      springTo(target, springV);
-      return;
-    }
-
-    // 左スワイプ
-    let target: number;
-    if (v < -FLICK_VELOCITY) target = -openWidth;
-    else if (v > FLICK_VELOCITY) target = 0;
-    else target = cur <= -openWidth / 2 ? -openWidth : 0;
-    springTo(target, springV);
+    settle(start.current.base, offsetRef.current, vel.current.v, dispVelRef.current);
   }
 
   // 初期 style（再レンダー時にこの静止位置で描く。以後の動きは applyOffset が上書き）。
