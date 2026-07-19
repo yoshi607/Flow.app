@@ -112,7 +112,7 @@ export default function NoteList({
   deletingId?: string | null;
   sidebarCollapsed?: boolean;
 }) {
-  const { folders, emptyTrash, restoreNote, updateNote } = useNotes();
+  const { folders, emptyTrash, restoreNote, updateNote, togglePin } = useNotes();
   // 「移動」対象のメモ（フォルダ選択シートを開く）
   const [movingNote, setMovingNote] = useState<Note | null>(null);
 
@@ -161,6 +161,19 @@ export default function NoteList({
         onClick: () => onRequestDelete(note.id),
       },
     ];
+  }
+
+  // 右スワイプで出す単一アクション：ピン留め／解除（アクティブなメモのみ）。
+  // スワイプしきると押さずにトグルする。
+  function leadingActionFor(note: Note): SwipeAction | undefined {
+    if (note.status !== "active") return undefined;
+    return {
+      key: "pin",
+      label: note.pinned ? "ピン解除" : "ピン留め",
+      icon: <IconPin filled={note.pinned} />,
+      className: "bg-amber-500",
+      onClick: () => togglePin(note.id),
+    };
   }
 
   const title = query.trim()
@@ -240,6 +253,7 @@ export default function NoteList({
             <SwipeRow
               key={note.id}
               actions={actionsFor(note)}
+              leadingAction={leadingActionFor(note)}
               className={`mb-1 rounded-2xl ${
                 deletingId === note.id
                   ? "flow-row-delete"

@@ -23,6 +23,7 @@ export interface SwipeAction {
 
 const ACTION_WIDTH_NORMAL = 72; // 1アクションあたりの幅(px)
 const ACTION_WIDTH_COMPACT = 64; // 背の低い行（フォルダ一覧）向けの詰めた幅
+const LEAD_WIDTH = 96; // 右スワイプで出るリーディングアクション（ピン留め）の幅。少し横長。
 
 // --- トラックパッド(2本指スクロール)の効き具合。数値を上げるほど敏感になる ---
 // スクロール量に対して実際に開く量の比率（1.0 で等倍＝かなり敏感）
@@ -51,6 +52,9 @@ export default function SwipeRow({
   // スワイプで動く前面の背景。背後のアクションを隠すため不透明である必要がある。
   // 置かれる場所の地色に合わせて差し替える（既定は本文一覧の白）。
   contentClassName = "bg-white dark:bg-neutral-950",
+  // 右スワイプで左側に出す単一アクション（ピン留めなど）。スワイプしきると
+  // ボタンを押さなくても実行する。
+  leadingAction,
 }: {
   actions: SwipeAction[];
   children: ReactNode;
@@ -58,6 +62,7 @@ export default function SwipeRow({
   className?: string;
   compact?: boolean;
   contentClassName?: string;
+  leadingAction?: SwipeAction;
 }) {
   const { isTouch } = useDevice();
   const [offset, setOffset] = useState(0); // 現在の表示ずらし量(px, 0以下)
@@ -74,6 +79,11 @@ export default function SwipeRow({
 
   const actionWidth = compact ? ACTION_WIDTH_COMPACT : ACTION_WIDTH_NORMAL;
   const openWidth = actions.length * actionWidth;
+  const hasLead = !!leadingAction;
+  const leadWidth = LEAD_WIDTH;
+  // 右スワイプ用リーディングアクションの最新値を native wheel リスナーから読む控え。
+  const leadingActionRef = useRef(leadingAction);
+  leadingActionRef.current = leadingAction;
 
   // この行を閉じる（他の行から呼ばれても同じ）。インスタンスごとに安定させ、
   // openRegistry の同一判定に使う。
@@ -120,8 +130,11 @@ export default function SwipeRow({
 
       if (engaged) {
         beginOpen(); // 他の開いている行を閉じる
+        const rowW = rowRef.current?.offsetWidth ?? 0;
         let next = offsetRef.current - e.deltaX * WHEEL_SENSITIVITY;
-        if (next > 0) next = 0;
+        // 右方向（正）はリーディングアクションがある行のみ。行幅まで引ける。
+        const maxRight = leadingActionRef.current ? rowW : 0;
+        if (next > maxRight) next = maxRight;
         if (next < -openWidth) next = -openWidth;
         setDragging(true); // 追従中はアニメーションを切る
         setOffset(next);
@@ -132,7 +145,21 @@ export default function SwipeRow({
       wheelTimer.current = setTimeout(() => {
         wheelAccum.current = 0;
         setDragging(false);
-        setOffset(offsetRef.current < -openWidth / 2 ? -openWidth : 0);
+        const cur = offsetRef.current;
+        if (cur > 0) {
+          // 右スワイプ：しきり（行幅の半分超）ならボタンを押さず実行、そうでなければ
+          // ボタンを表示した状態でスナップ、浅ければ閉じる。
+          const rowW = rowRef.current?.offsetWidth ?? 0;
+          const lead = leadingActionRef.current;
+          if (lead && cur >= rowW * 0.5) {
+            setOffset(0);
+            lead.onClick();
+          } else {
+            setOffset(cur >= leadWidth / 2 ? leadWidth : 0);
+          }
+        } else {
+          setOffset(cur < -openWidth / 2 ? -openWidth : 0);
+        }
       }, 140);
     };
 
@@ -171,8 +198,13 @@ export default function SwipeRow({
     }
     if (axis.current !== "x") return;
     let next = start.current.base + dx;
-    // 開ける範囲は 0（閉）〜 -openWidth（全開）。少しだけ弾性を持たせる
-    if (next > 0) next = next * 0.2;
+    // 開ける範囲：左（アクション）は 0〜-openWidth、右（ピン留め）はリーディング
+    // アクションがある行のみ 0〜行幅まで（しきりで実行するため広く引ける）。少し弾性。
+    const rowW = rowRef.current?.offsetWidth ?? 0;
+    if (next > 0) {
+      if (!hasLead) next = next * 0.2;
+      else if (next > rowW) next = rowW + (next - rowW) * 0.2;
+    }
     if (next < -openWidth) next = -openWidth + (next + openWidth) * 0.2;
     setOffset(next);
   }
@@ -180,12 +212,26 @@ export default function SwipeRow({
   function onTouchEnd() {
     setDragging(false);
     if (axis.current !== "x") return;
-    // 半分以上開いていれば全開、そうでなければ閉じる
+    if (offset > 0) {
+      // 右スワイプ：しきり（行幅の半分超）ならボタンを押さず実行、そうでなければ
+      // ボタンを表示した状態でスナップ、浅ければ閉じる。
+      const rowW = rowRef.current?.offsetWidth ?? 0;
+      if (leadingAction && offset >= rowW * 0.5) {
+        setOffset(0);
+        leadingAction.onClick();
+      } else {
+        setOffset(offset >= leadWidth / 2 ? leadWidth : 0);
+      }
+      return;
+    }
+    // 左スワイプ：半分以上開いていれば全開、そうでなければ閉じる
     setOffset(offset < -openWidth / 2 ? -openWidth : 0);
   }
 
   // スワイプの開き具合（0〜1）。これに応じてアクションを小→大に見せる。
-  const revealRatio = openWidth > 0 ? Math.min(1, Math.abs(offset) / openWidth) : 0;
+  // 左スワイプ（offset<0）のときだけ効かせる（右スワイプ中は 0）。
+  const revealRatio =
+    openWidth > 0 ? Math.min(1, Math.max(0, -offset) / openWidth) : 0;
 
   // 各ボタンを「小さい状態から」スワイプ量に応じて順番に現れさせる。
   // 前面のコンテンツは不透明でボタンを覆っているため、スワイプで“覆いが外れた”
@@ -205,6 +251,17 @@ export default function SwipeRow({
         : "transform 200ms var(--ease-spring), opacity 200ms ease-out",
     } as const;
   };
+
+  // リーディングアクション（右スワイプ）も同じ質感で小→大にせり上げる。
+  const leadRatio =
+    leadWidth > 0 ? Math.min(1, Math.max(0, offset) / leadWidth) : 0;
+  const leadStyle = {
+    transform: `scale(${0.2 + 0.8 * leadRatio})`,
+    opacity: leadRatio,
+    transition: dragging
+      ? "none"
+      : "transform 200ms var(--ease-spring), opacity 200ms ease-out",
+  } as const;
 
   return (
     <div
@@ -243,6 +300,31 @@ export default function SwipeRow({
           </div>
         ))}
       </div>
+
+      {/* 右スワイプで左側に出るリーディングアクション（ピン留め）。スワイプ量に
+          応じて領域が広がり、しきると押さずに実行される。 */}
+      {leadingAction && (
+        <div
+          className="absolute inset-y-0 left-0 flex"
+          style={{ width: Math.max(leadWidth, offset) }}
+        >
+          <div className="flex flex-1 p-1">
+            <button
+              onClick={() => {
+                closeSelf();
+                leadingAction.onClick();
+              }}
+              style={leadStyle}
+              className={`flow-press flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.6rem] text-xs font-medium text-white ${leadingAction.className}`}
+            >
+              <span className="flex h-5 w-5 items-center justify-center">
+                {leadingAction.icon}
+              </span>
+              {leadingAction.label}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 前面のコンテンツ */}
       <div
