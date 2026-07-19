@@ -32,6 +32,10 @@ const ACTION_WIDTH_COMPACT = 64; // 背の低い行（フォルダ一覧）向�
 const LEAD_WIDTH = 192; // 右スワイプで出るリーディングアクション（ピン留め）の幅。横長。
 // 右へ「振り切った（行幅分いっぱいまでスワイプ）」とみなす割合。
 const LEAD_COMMIT_RATIO = 0.9;
+// ピン留めを「確定」させる右フリックの速度しきい値(px/ms)。距離が振り切りに
+// 満たなくても、これ以上の速さで右にはじけば確定する（素早く短いフリックに対応）。
+// FLICK_VELOCITY(=ボタンを開くだけ) より高くし、意図的な速いフリックのみ確定させる。
+const LEAD_COMMIT_VELOCITY = 0.9;
 
 // 横方向の意図を判定する不感帯(px)。これを超えるまでは反応しない。
 const AXIS_DEADZONE = 6;
@@ -285,8 +289,13 @@ export default function SwipeRow({
     // 閉じた状態から：左右どちらへも開ける
     if (cur > 0) {
       const lead = leadingActionRef.current;
-      if (lead && (wasZone || cur >= rowW * LEAD_COMMIT_RATIO)) {
-        springTo(0, springV); // 振り切り → 実行してスナップで戻す
+      // ピン留め確定：距離が振り切り閾値を超えた（or 振り切りゾーン滞在）か、
+      // 距離が閾値未満でも速い右フリックなら確定。距離だけを唯一の条件にしない。
+      if (
+        lead &&
+        (wasZone || cur >= rowW * LEAD_COMMIT_RATIO || v >= LEAD_COMMIT_VELOCITY)
+      ) {
+        springTo(0, springV); // 振り切り/フリック → 実行してスナップで戻す
         lead.onClick();
         return;
       }
