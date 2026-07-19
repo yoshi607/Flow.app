@@ -325,28 +325,9 @@ body {
   }
 }
 
-/* ドック（別ウィンドウ→左右分割/全画面）の初回表示。iPad のアプリ起動のように
-   「下から拡大しながら現れる」。下端(bottom center)を起点に scale を小さく＋
-   下方向へ少しオフセットし、透明から最終配置(scale100%・不透明)へ収める。
-   ・要素のマウント時に一度だけ再生（開くたびに新規マウント＝毎回発火）。回転や
-     レイアウト変化では再生されない（同じ要素のまま class が変わるだけ）。
-   ・fill-mode は backwards のみ：開始前は from を表示、終了後は素の状態へ戻す。
-     transform を残さないので本文内の position:fixed 等に影響しない。
-   ・終了(非表示)はこの対象外＝即時非表示。 */
-@keyframes flow-dock-pop {
-  from {
-    transform: translateY(16px) scale(0.94);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-}
-.flow-dock-pop {
-  transform-origin: bottom center;
-  animation: flow-dock-pop 640ms var(--ease-out) backwards;
-}
+/* ドック（別ウィンドウ→左右分割/全画面）の初回表示「下から拡大しながら現れる」は
+   AppShell 側の WAAPI(element.animate) で左右パネルを同時に再生する。display:contents
+   →flex への切替では CSS アニメが安定発火しないため。動き低減は JS 側で判定してスキップ。 */
 
 /* 指で戻している最中は、指の位置に完全同期させる（アニメーションを止める） */
 .flow-drag-follow {
@@ -599,10 +580,6 @@ body {
   .flow-arrow-head {
     opacity: 1 !important;
     transform: none !important;
-    animation: none !important;
-  }
-  /* ドックの初回表示ポップも省略し、即座に最終状態で表示する */
-  .flow-dock-pop {
     animation: none !important;
   }
 }

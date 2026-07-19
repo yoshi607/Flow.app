@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useNotes } from "@/lib/store";
@@ -18,6 +24,11 @@ const NoteEditor = dynamic(() => import("./NoteEditor"), { ssr: false });
 // 設定ダイアログも開くまで不要
 const SettingsDialog = dynamic(() => import("./SettingsDialog"), { ssr: false });
 
+// paint 前に実行したい（アニメの初期状態を先に確定させてチラつきを防ぐ）が、
+// SSR では useLayoutEffect が警告を出すので、サーバーでは useEffect にフォールバック。
+const useIsoLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 export default function AppShell({ userEmail }: { userEmail: string }) {
   const { notes, folders, loading, createNote, trashNote, deleteNotePermanently } =
     useNotes();
@@ -33,9 +44,6 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   // PWA の「別ウィンドウで開く」で右側にドック（固定表示）するメモの id。
   // OS の別ウィンドウが作れないぶん、画面内を左右に分割して両方を見せる。
   const [dockedId, setDockedId] = useState<string | null>(null);
-  // 開いた直後だけ true。左右パネルの「下から拡大」ポップ演出を一度だけ出す
-  // （回転やレイアウト変化では再発火させないため、クラスではなくこの旗で管理）。
-  const [dockPop, setDockPop] = useState(false);
   // ×で閉じる最中（横画面）。右ドックの幅を0へ縮め、左側を右へ伸ばして戻す。
   const [dockClosing, setDockClosing] = useState(false);
   // 横向き（幅1024px以上）か。ドック中はこれで「左右分割」か「メモ全画面」かを
@@ -57,6 +65,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const editorPaneRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  // ドックの左右パネル（開いた瞬間の「下から拡大」演出のため）
+  const leftPanelRef = useRef<HTMLDivElement>(null);
+  const dockPaneRef = useRef<HTMLDivElement>(null);
 
   // --- ジェスチャー追従（指の動きに完全同期させる） ---
   // dragX: サイドバーの現在位置(px, -幅〜0)。null なら CSS 側の開閉に任せる
@@ -94,6 +105,38 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     const t = window.setTimeout(preload, 1200); // Safari 等の保険
     return () => window.clearTimeout(t);
   }, []);
+
+  // ドックを開いた瞬間だけ、左右パネルを「下から拡大しながら現れる」演出で出す。
+  // 左パネルは display:contents→flex に切り替わる要素で、CSSアニメが安定して
+  // 発火しないことがあるため、WAAPI で左右まとめて確実に・同時に再生する。
+  // paint 前（layout effect）に開始するので初期状態のチラつきが出ない。
+  // 回転やレイアウト変化では再生しない（dockedId が変わったときだけ発火）。
+  useIsoLayoutEffect(() => {
+    if (!dockedId) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) return;
+    // 横=右ドック＋左パネルの両方、縦=右ドック（全画面）のみ（左は非表示）。
+    const targets = wide
+      ? [dockPaneRef.current, leftPanelRef.current]
+      : [dockPaneRef.current];
+    for (const el of targets) {
+      if (!el || typeof el.animate !== "function") continue;
+      el.style.transformOrigin = "bottom center";
+      el.animate(
+        [
+          { transform: "translateY(16px) scale(0.94)", opacity: 0 },
+          { transform: "translateY(0) scale(1)", opacity: 1 },
+        ],
+        {
+          duration: 640,
+          easing: "cubic-bezier(0.22, 0.61, 0.36, 1)",
+          fill: "none",
+        },
+      );
+    }
+    // dockedId 変化時のみ発火させたいので wide は依存に入れない
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dockedId]);
 
   const isMobile = () =>
     typeof window !== "undefined" &&
@@ -454,17 +497,13 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       // ホーム画面PWAでは独立した別ウィンドウを作れない（OS制約）。そこで画面内で
       // メモをドック表示する。横向き（幅1024px以上）は左右分割、縦向きはメモを
       // 全画面表示（回転で相互に切り替わる）。左側の幅確保のためフォルダは畳む。
-      // 開いた瞬間だけ、左右パネルを「下から拡大」ポップ演出で出す（.flow-dock-pop）。
-      // dockPop を一定時間だけ立て、回転やレイアウト変化では再発火させない。
+      // 開いた瞬間の「下から拡大」演出は上の useIsoLayoutEffect（WAAPI）で左右
+      // まとめて再生する。ここでは状態を確定するだけ。
       setDockedId(id);
       setSelectedId(null);
       setFullscreen(false);
       setSidebarCollapsed(true);
       setDockClosing(false);
-      setDockPop(true);
-      // アニメ(.flow-dock-pop=640ms)完了後にクラスを外す。途中で外すと中断して
-      // ガクッと最終状態へ飛ぶため、必ずアニメ長より後にする。
-      window.setTimeout(() => setDockPop(false), 700);
       return;
     }
 
@@ -494,12 +533,11 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       setDockedId(null);
       return;
     }
-    setDockPop(false);
     setDockClosing(true);
     window.setTimeout(() => {
       setDockedId(null);
       setDockClosing(false);
-    }, 80);
+    }, 180);
   }
 
   const dragging = dragX !== null || backX !== null;
@@ -530,13 +568,12 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           ・ドック横向き：左半分の丸角パネル（overflow-hidden で右へはみ出さない）
           ・ドック縦向き：非表示（右のメモを全画面にするため。状態は保持したまま） */}
       <div
+        ref={leftPanelRef}
         className={
           !dockedNote
             ? "contents"
             : wide
-              ? `${
-                  dockPop ? "flow-dock-pop " : ""
-                }relative flex min-w-0 flex-1 overflow-hidden rounded-r-[18px] bg-brand-50 dark:bg-neutral-950`
+              ? "relative flex min-w-0 flex-1 overflow-hidden rounded-r-[18px] bg-brand-50 dark:bg-neutral-950"
               : "hidden"
         }
       >
@@ -704,21 +741,19 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       </div>
 
       {/* ドックしたメモ。横向き(wide)＝右半分の丸角パネル、縦向き＝全画面。
-          ・開く：左右パネルとも「下から拡大」ポップ（.flow-dock-pop、dockPop の間だけ）。
+          ・開く：左右パネルとも「下から拡大」演出（上の useIsoLayoutEffect が WAAPI で
+            dockPaneRef/leftPanelRef を同時に再生）。
           ・閉じる(×)：横画面は外枠の幅を dockWidth→0 へ縮め、左隣の Flow を右へ
             伸ばして全画面へ戻す（dockClosing）。中身(本文)は常に dockWidth の固定幅で
             右端に貼り付け、外枠の overflow で隠すので折り返さない。縦画面は即時非表示。
           回転（縦⇔横）や幅変化はクラス/スタイルが変わるだけで即時。本文はマウント維持。 */}
       {dockedNote && (
         <div
+          ref={dockPaneRef}
           className={
             wide
-              ? `${
-                  dockPop ? "flow-dock-pop " : ""
-                }relative flex shrink-0 overflow-hidden rounded-l-[18px] bg-white dark:bg-neutral-950`
-              : `${
-                  dockPop ? "flow-dock-pop " : ""
-                }flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950`
+              ? "relative flex shrink-0 overflow-hidden rounded-l-[18px] bg-white dark:bg-neutral-950"
+              : "flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950"
           }
           style={
             wide
@@ -728,7 +763,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
                   width: dockClosing ? "0px" : dockWidth,
                   marginLeft: dockClosing ? "0px" : "8px",
                   transition: dockClosing
-                    ? "width 60ms ease-in-out, margin-left 60ms ease-in-out"
+                    ? "width 160ms ease-in-out, margin-left 160ms ease-in-out"
                     : "none",
                 }
               : undefined
