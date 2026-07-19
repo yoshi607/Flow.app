@@ -48,7 +48,7 @@ const SPRING_C = 30;
 // (targetX)へこの割合だけ近づける。1 に近いほど吸い付き、低いほど滑らか（ただし
 // 遅れて見える）。60fps 1フレームあたりの追従率として扱い、実 fps に依らず一定に
 // なるよう dt で正規化する。
-const SMOOTHING_FACTOR = 0.6;
+const SMOOTHING_FACTOR = 0.5;
 
 // --- トラックパッド(2本指スクロール) ---
 const WHEEL_SENSITIVITY = 0.4;
