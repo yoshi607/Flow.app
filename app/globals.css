@@ -452,16 +452,14 @@ body {
   transform-origin: left center;
 }
 
-/* ===== 左スワイプ操作 ===== */
+/* ===== スワイプ操作 ===== */
 .flow-swipe-row {
   touch-action: pan-y;
 }
+/* 位置は JS（指追従 or バネ）が offset を毎フレーム更新して駆動するため、
+   CSS の transition は掛けない（掛けると指に遅れて「もたつき」になる）。 */
 .flow-swipe-content {
-  transition: transform 280ms var(--ease-out);
   will-change: transform;
-}
-.flow-swipe-content.dragging {
-  transition: none;
 }
 
 /* 並べ替え中のフォルダ（④） */

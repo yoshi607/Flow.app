@@ -28,35 +28,47 @@ const LEAD_WIDTH = 192; // 右スワイプで出るリーディングアクシ�
 // ボタンを押さなくても実行する。
 const LEAD_COMMIT_RATIO = 0.9;
 
+// 横方向の意図を判定する不感帯(px)。これを超えるまでは反応しない。
+const AXIS_DEADZONE = 6;
+// フリック判定の速度しきい値(px/ms)。これ以上の速さで離すと、距離が足りなくても
+// その向きへスナップする。
+const FLICK_VELOCITY = 0.5;
+// 指を離した後の収束に使うバネ（ほぼ臨界減衰＝オーバーシュートしにくい）。
+const SPRING_K = 220; // 剛性
+const SPRING_C = 30; // 減衰（やや高め）
+
 // --- トラックパッド(2本指スクロール)の効き具合。数値を上げるほど敏感になる ---
-// スクロール量に対して実際に開く量の比率（1.0 で等倍＝かなり敏感）
 const WHEEL_SENSITIVITY = 0.4;
-// 横方向が縦方向のこの倍率を超えたときだけ反応する（縦スクロール中の誤爆防止）
 const WHEEL_AXIS_RATIO = 1.5;
-// 横に累計これだけ動くまでは開き始めない（触れただけで開かないための「あそび」）
 const WHEEL_START_PX = 30;
 
 // 開いている行は常に1つだけにする。別の行で横スワイプが始まったら、前に開いて
-// いた行を閉じる（＝スライドのアニメーションで元に戻す）。フォルダ一覧・メモ一覧
-// をまたいで単一にしたいので、モジュールレベルに1つだけ持つ。
+// いた行を閉じる。フォルダ一覧・メモ一覧をまたいで単一にしたいのでモジュール
+// レベルに1つだけ持つ。
 const openRegistry: { close: (() => void) | null } = { close: null };
 
-// 左スワイプで右側にアクション（共有・移動・削除など）を表示する行（⑥）。
-// タッチ端末でのみジェスチャーを有効化し、非タッチ端末では
-// そのまま children を表示する（右クリック等は各画面の別UIで対応）。
+// 振り切りの合図（対応端末のみ・iOS は無視される）。
+function fireHaptic() {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    try {
+      navigator.vibrate(10);
+    } catch {
+      /* no-op */
+    }
+  }
+}
+
+// 左スワイプで右側にアクション（共有・移動・削除など）、右スワイプで左側に
+// リーディングアクション（ピン留め）を表示する行（⑥）。ドラッグ中は指に 1:1 で
+// 追従し、離した後だけバネで収束する。アニメ中に触れば即座に追従を再開できる。
 export default function SwipeRow({
   actions,
   children,
   disabled = false,
   className = "",
-  // 背の低い行（フォルダ一覧）でアクションが枠からはみ出さないよう、
-  // アイコン・文字を一回り小さくした詰めた表示にする。
   compact = false,
-  // スワイプで動く前面の背景。背後のアクションを隠すため不透明である必要がある。
-  // 置かれる場所の地色に合わせて差し替える（既定は本文一覧の白）。
   contentClassName = "bg-white dark:bg-neutral-950",
-  // 右スワイプで左側に出す単一アクション（ピン留めなど）。スワイプしきると
-  // ボタンを押さなくても実行する。
+  // 右スワイプで左側に出す単一アクション（ピン留めなど）。振り切ると押さずに実行。
   leadingAction,
 }: {
   actions: SwipeAction[];
@@ -68,100 +80,143 @@ export default function SwipeRow({
   leadingAction?: SwipeAction;
 }) {
   const { isTouch } = useDevice();
-  const [offset, setOffset] = useState(0); // 現在の表示ずらし量(px, 0以下)
-  const [dragging, setDragging] = useState(false);
+  const [offset, setOffset] = useState(0); // 現在の表示ずらし量(px)
+  // 振り切りゾーンに入っているか（合図表示用）
+  const [committing, setCommitting] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null); // バネアニメの rAF id
   const start = useRef({ x: 0, y: 0, base: 0 });
   const axis = useRef<"none" | "x" | "y">("none");
-  const rowRef = useRef<HTMLDivElement>(null);
+  // 速度計測（offset 方向, px/ms）。離した瞬間のフリック判定とバネ初速に使う。
+  const vel = useRef({ x: 0, t: 0, v: 0 });
+  const wasCommitting = useRef(false);
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 「あそび」判定用に、今回のスクロールで横に動いた累計量
   const wheelAccum = useRef(0);
-  // 最新の offset をリスナーから読むための控え
   const offsetRef = useRef(0);
   offsetRef.current = offset;
+  const leadingActionRef = useRef(leadingAction);
+  leadingActionRef.current = leadingAction;
 
   const actionWidth = compact ? ACTION_WIDTH_COMPACT : ACTION_WIDTH_NORMAL;
   const openWidth = actions.length * actionWidth;
   const hasLead = !!leadingAction;
   const leadWidth = LEAD_WIDTH;
-  // 右スワイプ用リーディングアクションの最新値を native wheel リスナーから読む控え。
-  const leadingActionRef = useRef(leadingAction);
-  leadingActionRef.current = leadingAction;
 
-  // この行を閉じる（他の行から呼ばれても同じ）。インスタンスごとに安定させ、
-  // openRegistry の同一判定に使う。
-  const closeSelf = useCallback(() => setOffset(0), []);
+  const cancelSpring = useCallback(() => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  // closeSelf は openRegistry の同一判定に使うので安定させる（最新の springTo は
+  // ref 経由で呼ぶ）。
+  const springToRef = useRef<(target: number, v0?: number) => void>(() => {});
+  const closeSelf = useCallback(() => {
+    setCommitting(false);
+    wasCommitting.current = false;
+    springToRef.current(0, 0);
+  }, []);
+
+  // 指を離した後の収束（バネ）。初速 v0(px/ms) を引き継ぐ。毎フレーム offset を
+  // 更新するので、途中で touch されれば offsetRef から現在位置を拾って追従再開できる。
+  const springTo = useCallback(
+    (target: number, v0 = 0) => {
+      cancelSpring();
+      let x = offsetRef.current;
+      let v = v0 * 1000; // px/ms -> px/s
+      let last = performance.now();
+      const step = (now: number) => {
+        let dt = (now - last) / 1000;
+        last = now;
+        if (dt > 0.032) dt = 0.032; // タブ復帰などの大ジャンプを抑える
+        const a = -SPRING_K * (x - target) - SPRING_C * v;
+        v += a * dt;
+        x += v * dt;
+        if (Math.abs(x - target) < 0.5 && Math.abs(v) < 8) {
+          rafRef.current = null;
+          setOffset(target);
+          if (target === 0 && openRegistry.close === closeSelf) {
+            openRegistry.close = null;
+          }
+          return;
+        }
+        setOffset(x);
+        rafRef.current = requestAnimationFrame(step);
+      };
+      rafRef.current = requestAnimationFrame(step);
+    },
+    [cancelSpring, closeSelf],
+  );
+  springToRef.current = springTo;
 
   // 横スワイプが始まったときに呼ぶ。前に開いていた別の行を閉じ、自分を登録する。
   const beginOpen = useCallback(() => {
     if (openRegistry.close && openRegistry.close !== closeSelf) {
-      openRegistry.close(); // 前の行をスライドで元に戻す
+      openRegistry.close();
     }
     openRegistry.close = closeSelf;
   }, [closeSelf]);
 
-  // 閉じ切ったら登録を外す。アンマウント時も同様（開いたまま消えた場合の掃除）。
-  useEffect(() => {
-    if (offset === 0 && openRegistry.close === closeSelf) {
-      openRegistry.close = null;
-    }
-  }, [offset, closeSelf]);
+  // アンマウント時の掃除（開いたまま消えた場合）。
   useEffect(
     () => () => {
+      cancelSpring();
       if (openRegistry.close === closeSelf) openRegistry.close = null;
     },
-    [closeSelf],
+    [cancelSpring, closeSelf],
   );
 
-  // トラックパッド（iPadのキーボード接続時など）の2本指・横スクロールでも
-  // アクションを開けるようにする。指のスワイプは touch イベント側で処理。
-  // ※ preventDefault が必要なため、passive:false のネイティブリスナーで登録する。
+  // トラックパッド（iPadのキーボード接続時など）の2本指・横スクロールでも操作できる。
   useEffect(() => {
     const el = rowRef.current;
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
-      // 明確に横方向のときだけ反応（縦スクロールは邪魔しない）
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * WHEEL_AXIS_RATIO) return;
       e.preventDefault();
 
-      // 開き始めるまでの「あそび」。少し触れただけでは動かさない。
-      // 既に開いている最中はそのまま追従させる。
       wheelAccum.current += e.deltaX;
       const engaged =
         offsetRef.current !== 0 || Math.abs(wheelAccum.current) > WHEEL_START_PX;
 
       if (engaged) {
-        beginOpen(); // 他の開いている行を閉じる
+        beginOpen();
+        cancelSpring();
         const rowW = rowRef.current?.offsetWidth ?? 0;
         let next = offsetRef.current - e.deltaX * WHEEL_SENSITIVITY;
-        // 右方向（正）はリーディングアクションがある行のみ。行幅まで引ける。
         const maxRight = leadingActionRef.current ? rowW : 0;
         if (next > maxRight) next = maxRight;
         if (next < -openWidth) next = -openWidth;
-        setDragging(true); // 追従中はアニメーションを切る
+        if (leadingActionRef.current && next > 0) {
+          const inZone = next >= rowW * LEAD_COMMIT_RATIO;
+          if (inZone !== wasCommitting.current) {
+            wasCommitting.current = inZone;
+            setCommitting(inZone);
+            if (inZone) fireHaptic();
+          }
+        }
         setOffset(next);
       }
 
-      // スクロールが止まったら開/閉にスナップする
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
       wheelTimer.current = setTimeout(() => {
         wheelAccum.current = 0;
-        setDragging(false);
         const cur = offsetRef.current;
+        const rowW = rowRef.current?.offsetWidth ?? 0;
+        const wasZone = wasCommitting.current;
+        wasCommitting.current = false;
+        setCommitting(false);
         if (cur > 0) {
-          // 右スワイプ：しきり（行幅の半分超）ならボタンを押さず実行、そうでなければ
-          // ボタンを表示した状態でスナップ、浅ければ閉じる。
-          const rowW = rowRef.current?.offsetWidth ?? 0;
           const lead = leadingActionRef.current;
-          if (lead && cur >= rowW * LEAD_COMMIT_RATIO) {
-            setOffset(0);
+          if (lead && (wasZone || cur >= rowW * LEAD_COMMIT_RATIO)) {
+            springTo(0, 0);
             lead.onClick();
           } else {
-            setOffset(cur >= leadWidth / 2 ? leadWidth : 0);
+            springTo(cur >= leadWidth / 2 ? leadWidth : 0, 0);
           }
         } else {
-          setOffset(cur < -openWidth / 2 ? -openWidth : 0);
+          springTo(cur <= -openWidth / 2 ? -openWidth : 0, 0);
         }
       }, 140);
     };
@@ -171,99 +226,134 @@ export default function SwipeRow({
       el.removeEventListener("wheel", onWheel);
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
     };
-    // isTouch/disabled を依存に入れるのは必須。初回描画は端末判定前で
-    // isTouch=false のため ref の付かない div が描画され、この effect は
-    // rowRef.current=null で何もせず終わる。判定後に描画が切り替わった
-    // タイミングで再実行しないと、wheel リスナーが永久に付かない。
-  }, [openWidth, isTouch, disabled, beginOpen]);
+  }, [openWidth, leadWidth, isTouch, disabled, beginOpen, cancelSpring, springTo]);
 
-  if (!isTouch || disabled || actions.length === 0) {
+  if (!isTouch || disabled || (actions.length === 0 && !leadingAction)) {
     return <div className={className}>{children}</div>;
   }
 
   function onTouchStart(e: React.TouchEvent) {
+    // 割り込み：バネ収束中でも、触れた瞬間に現在位置から 1:1 追従を再開する。
+    cancelSpring();
     const t = e.touches[0];
-    start.current = { x: t.clientX, y: t.clientY, base: offset };
+    start.current = { x: t.clientX, y: t.clientY, base: offsetRef.current };
     axis.current = "none";
-    setDragging(true);
+    vel.current = { x: offsetRef.current, t: performance.now(), v: 0 };
+    wasCommitting.current = false;
+    setCommitting(false);
   }
 
   function onTouchMove(e: React.TouchEvent) {
     const t = e.touches[0];
     const dx = t.clientX - start.current.x;
     const dy = t.clientY - start.current.y;
-    // 最初の動きで縦横どちらのジェスチャーか判定
+    // 最初の動きで縦横どちらか判定（不感帯を超えるまでは反応しない）
     if (axis.current === "none") {
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      if (Math.abs(dx) < AXIS_DEADZONE && Math.abs(dy) < AXIS_DEADZONE) return;
       axis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      // 横スワイプと確定した瞬間に、前に開いていた別の行を閉じる
       if (axis.current === "x") beginOpen();
     }
     if (axis.current !== "x") return;
+
+    // 1:1 追従。可動域の外はラバーバンド（移動量を 0.2 に減衰）。
     let next = start.current.base + dx;
-    // 開ける範囲：左（アクション）は 0〜-openWidth、右（ピン留め）はリーディング
-    // アクションがある行のみ 0〜行幅まで（しきりで実行するため広く引ける）。少し弾性。
     const rowW = rowRef.current?.offsetWidth ?? 0;
     if (next > 0) {
       if (!hasLead) next = next * 0.2;
       else if (next > rowW) next = rowW + (next - rowW) * 0.2;
     }
     if (next < -openWidth) next = -openWidth + (next + openWidth) * 0.2;
+
+    // 速度計測（軽い平滑化）
+    const now = performance.now();
+    const dt = now - vel.current.t;
+    if (dt > 0) {
+      const inst = (next - vel.current.x) / dt;
+      vel.current.v = vel.current.v * 0.4 + inst * 0.6;
+      vel.current.x = next;
+      vel.current.t = now;
+    }
+
+    // 振り切りゾーンの出入りを監視し、「未達→到達」でのみ合図（拡大・彩度・振動）。
+    if (hasLead && next > 0) {
+      const inZone = next >= rowW * LEAD_COMMIT_RATIO;
+      if (inZone !== wasCommitting.current) {
+        wasCommitting.current = inZone;
+        setCommitting(inZone);
+        if (inZone) fireHaptic();
+      }
+    } else if (wasCommitting.current) {
+      wasCommitting.current = false;
+      setCommitting(false);
+    }
+
     setOffset(next);
   }
 
   function onTouchEnd() {
-    setDragging(false);
-    if (axis.current !== "x") return;
-    if (offset > 0) {
-      // 右スワイプ：しきり（行幅の半分超）ならボタンを押さず実行、そうでなければ
-      // ボタンを表示した状態でスナップ、浅ければ閉じる。
-      const rowW = rowRef.current?.offsetWidth ?? 0;
-      if (leadingAction && offset >= rowW * LEAD_COMMIT_RATIO) {
-        setOffset(0);
-        leadingAction.onClick();
-      } else {
-        setOffset(offset >= leadWidth / 2 ? leadWidth : 0);
-      }
+    if (axis.current !== "x") {
+      axis.current = "none";
       return;
     }
-    // 左スワイプ：半分以上開いていれば全開、そうでなければ閉じる
-    setOffset(offset < -openWidth / 2 ? -openWidth : 0);
+    axis.current = "none";
+    const rowW = rowRef.current?.offsetWidth ?? 0;
+    const v = vel.current.v; // px/ms（右が正）
+    const cur = offsetRef.current;
+    const wasZone = wasCommitting.current;
+    wasCommitting.current = false;
+    setCommitting(false);
+
+    if (cur > 0) {
+      // 右スワイプ
+      const lead = leadingAction;
+      if (lead && (wasZone || cur >= rowW * LEAD_COMMIT_RATIO)) {
+        // 振り切り → 実行してその場でスナップして戻す
+        springTo(0, v);
+        lead.onClick();
+        return;
+      }
+      // ボタン表示ゾーン：フリック速度 or 位置で開閉を決める
+      let target: number;
+      if (v > FLICK_VELOCITY) target = leadWidth;
+      else if (v < -FLICK_VELOCITY) target = 0;
+      else target = cur >= leadWidth / 2 ? leadWidth : 0;
+      springTo(target, v);
+      return;
+    }
+
+    // 左スワイプ
+    let target: number;
+    if (v < -FLICK_VELOCITY) target = -openWidth;
+    else if (v > FLICK_VELOCITY) target = 0;
+    else target = cur <= -openWidth / 2 ? -openWidth : 0;
+    springTo(target, v);
   }
 
-  // スワイプの開き具合（0〜1）。これに応じてアクションを小→大に見せる。
-  // 左スワイプ（offset<0）のときだけ効かせる（右スワイプ中は 0）。
+  // 左スワイプの開き具合（0〜1）。右スワイプ中は 0。
   const revealRatio =
     openWidth > 0 ? Math.min(1, Math.max(0, -offset) / openWidth) : 0;
 
-  // 各ボタンを「小さい状態から」スワイプ量に応じて順番に現れさせる。
-  // 前面のコンテンツは不透明でボタンを覆っているため、スワイプで“覆いが外れた”
-  // ボタンから見えていく。右端（削除）が最初に外れ、手前のボタンほど後に外れる。
-  // そこで各ボタンは「自分の覆いが外れる区間」で小→大にせり上がるようにし、
-  // スワイプすると順番に・小さいものから大きく育って見えるようにする。
+  // 各ボタンを「小さい状態から」スワイプ量に応じて順番にせり上げる（右端＝削除が先）。
   const n = actions.length;
   const actionStyle = (i: number) => {
-    // i=0 が手前、i=n-1 が右端。右端(n-1)は revealRatio 0〜1/n で、
-    // 手前(0)は (n-1)/n〜1 で 0→1 になる。
     const p = Math.max(0, Math.min(1, n * revealRatio - (n - 1 - i)));
     return {
       transform: `scale(${0.2 + 0.8 * p})`,
       opacity: p,
-      transition: dragging
-        ? "none"
-        : "transform 200ms var(--ease-spring), opacity 200ms ease-out",
     } as const;
   };
 
-  // リーディングアクション（右スワイプ）も同じ質感で小→大にせり上げる。
-  const leadRatio =
+  // リーディングアクション（右スワイプ）。振り切りゾーンではわずかに拡大＋彩度を
+  // 上げて「離せば実行」を伝える。
+  const leadReveal =
     leadWidth > 0 ? Math.min(1, Math.max(0, offset) / leadWidth) : 0;
   const leadStyle = {
-    transform: `scale(${0.2 + 0.8 * leadRatio})`,
-    opacity: leadRatio,
-    transition: dragging
-      ? "none"
-      : "transform 200ms var(--ease-spring), opacity 200ms ease-out",
+    transform: `scale(${(0.2 + 0.8 * leadReveal) * (committing ? 1.12 : 1)})`,
+    opacity: leadReveal,
+    filter: committing ? "brightness(1.18) saturate(1.35)" : "none",
+    transition: committing
+      ? "transform 120ms var(--ease-spring), filter 120ms ease-out"
+      : "filter 120ms ease-out",
   } as const;
 
   return (
@@ -271,7 +361,7 @@ export default function SwipeRow({
       ref={rowRef}
       className={`flow-swipe-row relative overflow-hidden ${className}`}
     >
-      {/* 背後のアクション（丸みのある四角ボタン）。スワイプ量に応じて拡大する */}
+      {/* 背後の（左スワイプ）アクション。スワイプ量に応じて拡大する */}
       <div className="absolute inset-y-0 right-0 flex">
         {actions.map((a, i) => (
           <div
@@ -304,8 +394,8 @@ export default function SwipeRow({
         ))}
       </div>
 
-      {/* 右スワイプで左側に出るリーディングアクション（ピン留め）。スワイプ量に
-          応じて領域が広がり、しきると押さずに実行される。 */}
+      {/* 右スワイプで左側に出るリーディングアクション（ピン留め）。振り切ると
+          押さずに実行される。 */}
       {leadingAction && (
         <div
           className="absolute inset-y-0 left-0 flex"
@@ -329,18 +419,18 @@ export default function SwipeRow({
         </div>
       )}
 
-      {/* 前面のコンテンツ */}
+      {/* 前面のコンテンツ。位置は offset を直接反映（バネも offset を毎フレーム
+          更新するので transition は掛けない＝指に遅れない）。 */}
       <div
-        className={`flow-swipe-content relative ${contentClassName} ${
-          dragging ? "dragging" : ""
-        }`}
+        className={`flow-swipe-content relative ${contentClassName}`}
         style={{ transform: `translateX(${offset}px)` }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
         // 開いている状態で本体をタップしたら閉じる（誤操作防止）
         onClickCapture={(e) => {
-          if (offset !== 0) {
+          if (Math.abs(offsetRef.current) > 1) {
             e.preventDefault();
             e.stopPropagation();
             closeSelf();
