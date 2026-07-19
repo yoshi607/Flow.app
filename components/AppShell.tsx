@@ -33,11 +33,6 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   // PWA の「別ウィンドウで開く」で右側にドック（固定表示）するメモの id。
   // OS の別ウィンドウが作れないぶん、画面内を左右に分割して両方を見せる。
   const [dockedId, setDockedId] = useState<string | null>(null);
-  // 右ドックを開いた状態か（横画面の幅アニメの目標。true=幅50%, false=幅0%）。
-  const [dockOpen, setDockOpen] = useState(false);
-  // 開閉アニメ再生中のみ true。この間だけ width の transition を効かせ、
-  // 回転や（Stage Manager 等の）ウィンドウ幅変化では即時追従させる。
-  const [dockAnimating, setDockAnimating] = useState(false);
   // 横向き（幅1024px以上）か。ドック中はこれで「左右分割」か「メモ全画面」かを
   // 切り替える（回転にリアクティブに追従する）。
   const wide = useMediaQuery("(min-width: 1024px)");
@@ -454,19 +449,13 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       // ホーム画面PWAでは独立した別ウィンドウを作れない（OS制約）。そこで画面内で
       // メモをドック表示する。横向き（幅1024px以上）は左右分割、縦向きはメモを
       // 全画面表示（回転で相互に切り替わる）。左側の幅確保のためフォルダは畳む。
+      // マウント時に「下から拡大しながら現れる」演出は CSS(.flow-dock-pop) で行う。
+      // 開くたびに新規マウントされるので毎回発火し、回転やレイアウト変化では
+      // 再発火しない。終了(×)は即時非表示（アニメ無し）。
       setDockedId(id);
       setSelectedId(null);
       setFullscreen(false);
       setSidebarCollapsed(true);
-      // 横画面：右ドックを「右端固定・左端が伸びる」形で幅0→50%へ広げる。
-      // まず幅0で描画し、確実に1フレーム描いてから50%へ transition させる
-      // （二重 rAF で起点の0%を描かせる）。縦画面は全画面なので幅アニメは無い。
-      setDockOpen(false);
-      setDockAnimating(true);
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => setDockOpen(true)),
-      );
-      window.setTimeout(() => setDockAnimating(false), 320);
       return;
     }
 
@@ -483,29 +472,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     closeEditor();
   }
 
-  // 右ドックを閉じる。横画面では開くときの逆で、幅50%→0へ縮めてから解除する
-  // （右端固定のまま左端が右へ縮む＝左側が広がっていく）。縦画面は全画面なので
-  // 幅アニメは無く、即座に解除する。
-  function closeDock() {
-    if (!wide) {
-      setDockedId(null);
-      return;
-    }
-    setDockAnimating(true);
-    setDockOpen(false);
-    window.setTimeout(() => {
-      setDockedId(null);
-      setDockAnimating(false);
-    }, 300);
-  }
-
   const dragging = dragX !== null || backX !== null;
-
-  // 右ドックの「開いたときの幅」。ルート左右の p-2(=16px) と中央 gap-2(=8px) を
-  // 引いた残りを左右で二等分した値。外枠(開いた幅)と中身(常にこの固定幅)で同じ
-  // 値を使うので、開き切ったとき両者がピタリ一致し、本文の左端が欠けない。
-  // 100vw ベースなので回転・ウィンドウ幅変化に CSS だけで即追従する（JS不要）。
-  const dockWidth = "calc((100vw - 24px) / 2)";
 
   return (
     <div
@@ -698,49 +665,25 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       </div>
 
       {/* ドックしたメモ。横向き(wide)＝右半分の丸角パネル、縦向き＝全画面。
-          【横画面の開閉】スライドは使わず、外枠の width だけを 0↔半分 に伸縮させる。
-          外枠はフレックス末尾なので右端は常に画面右端に固定され、左端だけが動く。
-          中身(本文)は常に「開いたときの幅(dockWidth)」で固定し、外枠の右端に貼り
-          付けて overflow で見せ隠しする。よって本文は一切動かず・折り返しも起きず、
-          外枠の幅が変わることで「その場で表れる/隠れる」（3ペインの一覧最小化と
-          同じ質感）。transform は使わない。
-          transition は開閉中(dockAnimating)だけ効かせるので、回転（縦⇔横）や
-          ウィンドウ幅変化には即時追従（アニメ無し）。幅は 100vw ベースの CSS な
-          ので per-frame の JS は不要でカクつかない。回転してもクラスが変わるだけ
-          で本文はマウントされたまま維持される。 */}
+          初回マウント時だけ「下から拡大しながら現れる」演出（.flow-dock-pop：
+          下端起点の scale＋opacity）。開くたびに新規マウントされるので毎回発火し、
+          回転やレイアウト変化では再発火しない。終了(×)は即時非表示（アニメ無し）。
+          回転（縦⇔横）や幅変化もクラスが変わるだけで即時に切り替わり、本文は
+          マウントされたまま維持される。 */}
       {dockedNote && (
         <div
           className={
             wide
-              ? "relative flex shrink-0 overflow-hidden rounded-2xl bg-white dark:bg-neutral-950"
-              : "flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950"
-          }
-          style={
-            wide
-              ? {
-                  width: dockOpen ? dockWidth : "0px",
-                  transition: dockAnimating
-                    ? "width 260ms ease-in-out"
-                    : "none",
-                }
-              : undefined
+              ? "flow-dock-pop flex w-1/2 min-w-0 flex-col overflow-hidden rounded-2xl bg-white dark:bg-neutral-950"
+              : "flow-dock-pop flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950"
           }
         >
-          <div
-            className={
-              wide
-                ? "absolute inset-y-0 right-0 flex flex-col"
-                : "flex min-w-0 flex-1 flex-col"
-            }
-            style={wide ? { width: dockWidth } : undefined}
-          >
-            <NoteEditor
-              key={dockedNote.id}
-              note={dockedNote}
-              standalone
-              onBack={closeDock}
-            />
-          </div>
+          <NoteEditor
+            key={dockedNote.id}
+            note={dockedNote}
+            standalone
+            onBack={() => setDockedId(null)}
+          />
         </div>
       )}
 
