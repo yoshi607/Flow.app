@@ -48,7 +48,7 @@ const SPRING_C = 30;
 // (targetX)へこの割合だけ近づける。1 に近いほど吸い付き、低いほど滑らか（ただし
 // 遅れて見える）。60fps 1フレームあたりの追従率として扱い、実 fps に依らず一定に
 // なるよう dt で正規化する。
-const SMOOTHING_FACTOR = 0.5;
+const SMOOTHING_FACTOR = 0.4;
 
 // --- トラックパッド(2本指スクロール) ---
 const WHEEL_SENSITIVITY = 0.4;
@@ -230,7 +230,13 @@ export default function SwipeRow({
       cancelRaf();
       draggingRef.current = false; // なめしループを止めてバネへ引き継ぐ
       let x = offsetRef.current;
+      // target から離れる向きの初速は引き継がない。なめし係数が低いと、指を追い切る
+      // 前に離した表示速度が「開く側」へ残り、少しのスライドでも慣性で行き過ぎて
+      // 反対側のボタンが一瞬見える。target へ向かう勢いだけ残す。
+      if ((target - x) * v0 < 0) v0 = 0;
       let v = v0 * 1000; // px/ms -> px/s
+      // target を境に反対符号へは出さない（万一の行き過ぎでも反対側を露出させない）。
+      const fromSign = Math.sign(x - target);
       let last = performance.now();
       const step = (now: number) => {
         let dt = (now - last) / 1000;
@@ -239,6 +245,13 @@ export default function SwipeRow({
         const a = -SPRING_K * (x - target) - SPRING_C * v;
         v += a * dt;
         x += v * dt;
+        if (fromSign > 0 && x < target) {
+          x = target;
+          v = 0;
+        } else if (fromSign < 0 && x > target) {
+          x = target;
+          v = 0;
+        }
         if (Math.abs(x - target) < 0.5 && Math.abs(v) < 8) {
           rafRef.current = null;
           offsetRef.current = target;
