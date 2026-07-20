@@ -12,6 +12,11 @@
 -- バッチ側の変更は不要。
 --
 -- このマイグレーションは冪等（何度実行しても安全）。
+-- ※ 初版はトリガー関数に notes 専用の public.set_updated_at() を
+--    流用しており、設定の保存が
+--      record "new" has no field "title"
+--    で失敗した。初版を適用済みの環境も、このファイルをもう一度
+--    最後まで実行すれば直る。
 -- ============================================================
 
 create table if not exists public.user_settings (
@@ -22,11 +27,23 @@ create table if not exists public.user_settings (
   updated_at      timestamptz not null default now()
 );
 
--- updated_at 自動更新（0001_init.sql で作成済みの共通関数を使う）
+-- updated_at 自動更新。
+-- 共通名の public.set_updated_at() は 0006 で notes 専用
+-- （new.title / new.body などを参照する）になっているため流用できない。
+-- 流用すると user_settings の更新時に
+--   record "new" has no field "title"
+-- で失敗するので、このテーブル専用の関数を用意する。
+create or replace function public.set_user_settings_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end $$;
+
 drop trigger if exists user_settings_set_updated_at on public.user_settings;
 create trigger user_settings_set_updated_at
   before update on public.user_settings
-  for each row execute function public.set_updated_at();
+  for each row execute function public.set_user_settings_updated_at();
 
 -- ------------------------------------------------------------
 --  Row Level Security（本人の設定のみアクセス可）
