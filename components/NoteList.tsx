@@ -13,9 +13,7 @@ import {
 } from "@/lib/utils";
 import { type View } from "./Sidebar";
 import SwipeRow, { type SwipeAction } from "./SwipeRow";
-import NoteContextMenu, { type ContextMenuItem } from "./NoteContextMenu";
 import FolderPickerSheet from "./FolderPickerSheet";
-import { useDevice } from "@/lib/useDevice";
 import {
   IconPlus,
   IconSearch,
@@ -115,13 +113,8 @@ export default function NoteList({
   sidebarCollapsed?: boolean;
 }) {
   const { folders, emptyTrash, restoreNote, updateNote, togglePin } = useNotes();
-  const { isTouch } = useDevice();
   // 「移動」対象のメモ（フォルダ選択シートを開く）
   const [movingNote, setMovingNote] = useState<Note | null>(null);
-  // PC の右クリックメニュー（開いた座標と対象のメモ）
-  const [menu, setMenu] = useState<{ x: number; y: number; note: Note } | null>(
-    null,
-  );
 
   // 各メモの左スワイプアクションを組み立てる（⑥）
   function actionsFor(note: Note): SwipeAction[] {
@@ -181,24 +174,6 @@ export default function NoteList({
       className: "bg-amber-500",
       onClick: () => togglePin(note.id),
     };
-  }
-
-  // PC の右クリックメニューの項目。スワイプ操作と同じものを流用しているので、
-  // 一方に項目を足せば両方に反映される（タッチ＝スワイプ、PC＝右クリック）。
-  function menuItemsFor(note: Note): ContextMenuItem[] {
-    const rest: ContextMenuItem[] = actionsFor(note).map((a) => ({
-      key: a.key,
-      label: a.label,
-      icon: a.icon,
-      danger: a.key === "trash" || a.key === "delete",
-      onClick: a.onClick,
-    }));
-    const lead = leadingActionFor(note);
-    if (!lead) return rest;
-    return [
-      { key: lead.key, label: lead.label, icon: lead.icon, onClick: lead.onClick },
-      ...rest,
-    ];
   }
 
   const title = query.trim()
@@ -289,13 +264,6 @@ export default function NoteList({
             >
             <button
               onClick={() => onSelect(note.id)}
-              // PC は右クリックでメニュー。タッチ端末では左右スワイプで同じ操作が
-              // できるので出さない（長押しでメニューが出ると誤爆しやすい）。
-              onContextMenu={(e) => {
-                if (isTouch) return;
-                e.preventDefault();
-                setMenu({ x: e.clientX, y: e.clientY, note });
-              }}
               className={`flow-press block w-full rounded-2xl px-3 py-2.5 text-left ${
                 selectedId === note.id
                   ? "bg-brand-100 dark:bg-brand-500/20"
@@ -344,15 +312,6 @@ export default function NoteList({
             setMovingNote(null);
           }}
           onClose={() => setMovingNote(null)}
-        />
-      )}
-
-      {menu && (
-        <NoteContextMenu
-          x={menu.x}
-          y={menu.y}
-          items={menuItemsFor(menu.note)}
-          onClose={() => setMenu(null)}
         />
       )}
     </div>
