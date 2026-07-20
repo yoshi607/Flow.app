@@ -151,6 +151,10 @@ export default function SwipeRow({
   const wheelTargetRef = useRef(0);
   const leadingActionRef = useRef(leadingAction);
   leadingActionRef.current = leadingAction;
+  // 直前に書いた値。同じ値の書き込み（＝無駄なレイアウト/再描画）を避けるため。
+  const lastTrailW = useRef(-1);
+  const lastLeadW = useRef(-1);
+  const lastCommit = useRef<boolean | null>(null);
 
   const actionWidth = compact ? ACTION_WIDTH_COMPACT : ACTION_WIDTH_NORMAL;
   const openWidth = actions.length * actionWidth;
@@ -166,8 +170,11 @@ export default function SwipeRow({
     // アクション領域はスワイプ量に合わせて広がる。ボタンが出そろった後も指と一緒に
     // 動き続けられるようにするため（ここで止めると、ボタンが出た瞬間に動きが
     // 止まって見える）。広がったぶんは一番左のボタンが吸収する。
-    if (trailWrapRef.current) {
-      trailWrapRef.current.style.width = `${Math.max(openWidth, -x)}px`;
+    // width の書き換えはレイアウトを伴うので、変化したときだけ書く。
+    const trailW = Math.max(openWidth, -x);
+    if (trailWrapRef.current && lastTrailW.current !== trailW) {
+      lastTrailW.current = trailW;
+      trailWrapRef.current.style.width = `${trailW}px`;
     }
     // 左スワイプ（右側アクション）：右端が先に、手前ほど後にせり上がる
     const rr = openWidth > 0 ? Math.min(1, Math.max(0, -x) / openWidth) : 0;
@@ -179,8 +186,10 @@ export default function SwipeRow({
       btn.style.opacity = String(p);
     }
     // 右スワイプ（左側リーディング＝ピン留め）
-    if (leadWrapRef.current) {
-      leadWrapRef.current.style.width = `${Math.max(leadWidth, x)}px`;
+    const leadW = Math.max(leadWidth, x);
+    if (leadWrapRef.current && lastLeadW.current !== leadW) {
+      lastLeadW.current = leadW;
+      leadWrapRef.current.style.width = `${leadW}px`;
     }
     if (leadBtnRef.current) {
       const lr = leadWidth > 0 ? Math.min(1, Math.max(0, x) / leadWidth) : 0;
@@ -189,9 +198,13 @@ export default function SwipeRow({
         (0.2 + 0.8 * lr) * (commit ? 1.12 : 1)
       })`;
       leadBtnRef.current.style.opacity = String(lr);
-      leadBtnRef.current.style.filter = commit
-        ? "brightness(1.18) saturate(1.35)"
-        : "none";
+      // filter は再描画を誘発しやすいので、切り替わった時だけ書く。
+      if (lastCommit.current !== commit) {
+        lastCommit.current = commit;
+        leadBtnRef.current.style.filter = commit
+          ? "brightness(1.18) saturate(1.35)"
+          : "none";
+      }
     }
   }
   // 最新の applyOffset を安定した参照（ループ/バネ/レイアウト効果）から呼ぶための控え。
@@ -223,6 +236,13 @@ export default function SwipeRow({
     if (first === last && s.length >= 2) first = s[s.length - 2];
     const dt = last.t - first.t;
     lastVelRef.current = dt > 0 ? (last.x - first.x) / dt : 0;
+  }, []);
+
+  // 操作中フラグ。触れた時点で立てておくことで、ボタンが実際に見え始める前に
+  // 合成レイヤーを用意させる（初回ラスタライズをスワイプ中に起こさせない）。
+  // 再レンダーを挟まないよう classList を直接触る。
+  const setActive = useCallback((on: boolean) => {
+    rowRef.current?.classList.toggle("flow-swipe-active", on);
   }, []);
 
   const cancelRaf = useCallback(() => {
@@ -343,6 +363,7 @@ export default function SwipeRow({
           rafRef.current = null;
           offsetRef.current = target;
           applyOffsetRef.current(target);
+          setActive(false); // 静止したらレイヤーを解放する
           setRestOffset(target); // 再レンダー時の初期 style を合わせる
           if (target === 0 && openRegistry.close === closeSelf) {
             openRegistry.close = null;
@@ -355,7 +376,7 @@ export default function SwipeRow({
       };
       rafRef.current = requestAnimationFrame(step);
     },
-    [cancelRaf, closeSelf],
+    [cancelRaf, closeSelf, setActive],
   );
   springToRef.current = springTo;
 
@@ -470,6 +491,7 @@ export default function SwipeRow({
           rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
           screenWidthRef.current = window.innerWidth || rowWidthRef.current;
           resetSamples(offsetRef.current);
+          setActive(true);
           startWheelLoop();
         }
         // 生の積算値に足し込み、壁と抵抗は「生の値」に対して一度だけ適用する。
@@ -532,6 +554,8 @@ export default function SwipeRow({
     // （毎フレームの読み取り＝レイアウト往復を避ける）。
     rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
     screenWidthRef.current = window.innerWidth || rowWidthRef.current;
+    // 動き出す前にボタンをレイヤー化させておく（初回描画をスワイプ中に起こさない）。
+    setActive(true);
   }
 
   function onTouchMove(e: React.TouchEvent) {
@@ -615,7 +639,7 @@ export default function SwipeRow({
                   a.onClick();
                 }}
                 style={{ transform: `scale(${0.2 + 0.8 * p})`, opacity: p }}
-                className={`flow-press flex flex-1 flex-col items-center justify-center font-medium text-white ${
+                className={`flow-press flow-swipe-action flex flex-1 flex-col items-center justify-center font-medium text-white ${
                   compact
                     ? "gap-0.5 rounded-xl text-[10px] leading-none"
                     : "gap-1 rounded-[1.6rem] text-xs"
@@ -653,7 +677,7 @@ export default function SwipeRow({
                 transform: `scale(${0.2 + 0.8 * lr0})`,
                 opacity: lr0,
               }}
-              className={`flow-press flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.6rem] text-xs font-medium text-white ${leadingAction.className}`}
+              className={`flow-press flow-swipe-action flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.6rem] text-xs font-medium text-white ${leadingAction.className}`}
             >
               <span className="flex h-5 w-5 items-center justify-center">
                 {leadingAction.icon}

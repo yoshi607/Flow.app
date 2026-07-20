@@ -461,6 +461,14 @@ body {
 .flow-swipe-content {
   will-change: transform;
 }
+/* 触っている行のあいだだけ、アクションボタンを合成レイヤーに載せる。
+   ボタンは静止時 opacity:0 でラスタライズされていないため、スワイプで初めて
+   見えた瞬間に描画が発生して1フレーム落ちる（＝出た瞬間に一度カクつく）。
+   また非合成のままだと毎フレームの opacity/scale 変更が再描画になる。
+   常時付けると行数ぶんレイヤーが増えてしまうので、操作中の行に限定する。 */
+.flow-swipe-active .flow-swipe-action {
+  will-change: transform, opacity;
+}
 
 /* 並べ替え中のフォルダ（④） */
 .flow-reorder-dragging {
