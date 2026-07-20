@@ -35,7 +35,10 @@ const LEAD_COMMIT_RATIO = 0.9;
 // ピン留めを「確定」させる右フリックの速度しきい値(px/ms)。距離が振り切りに
 // 満たなくても、これ以上の速さで右にはじけば確定する（素早く短いフリックに対応）。
 // FLICK_VELOCITY(=ボタンを開くだけ) より高くし、意図的な速いフリックのみ確定させる。
-const LEAD_COMMIT_VELOCITY = 0.9;
+const LEAD_COMMIT_VELOCITY = 1.2;
+// ただし速度だけでは確定させず、最低限これだけは引いていることを要求する（行幅比）。
+// 速いスワイプで浅いうちに確定してしまうのを防ぐための下限。
+const LEAD_COMMIT_MIN_RATIO = 0.55;
 
 // 横方向の意図を判定する不感帯(px)。これを超えるまでは反応しない。
 const AXIS_DEADZONE = 6;
@@ -233,13 +236,17 @@ export default function SwipeRow({
       // ＝1回のスライドでは「リストへ戻る」までで、反対側のボタンは出さない。
       if (base < 0 && next > 0) next = 0;
       if (base > 0 && next < 0) next = 0;
-      // フル表示幅を超えたぶんはラバーバンドで抵抗させる。リーディングアクションが
-      // 無い行は「0px より右」自体が超過なので、0 を基準に抵抗をかける。
-      const maxRight = leadingActionRef.current ? rowW : 0;
-      if (next > maxRight) next = maxRight + rubberBand(next - maxRight, screenW);
-      if (next < -openWidth) {
-        next = -(openWidth + rubberBand(-next - openWidth, screenW));
+      if (leadingActionRef.current) {
+        // ピン留めがある行：行幅までは指と同じ速さで動かし、そこで止める。
+        if (next > rowW) next = rowW;
+      } else if (next > 0) {
+        // 出すものが無い方向。動かないことを伝えるため抵抗だけ残す。
+        next = rubberBand(next, screenW);
       }
+      // アクション側は、ボタンが出そろう位置(openWidth)までは指と同じ速さで動かし、
+      // そこで止める。ここでラバーバンドを掛けると、ボタンが出そろった瞬間に
+      // 減速して「一度引っかかる」ように感じるため掛けない（速度は一定に保つ）。
+      if (next < -openWidth) next = -openWidth;
       return next;
     },
     [openWidth],
@@ -373,10 +380,13 @@ export default function SwipeRow({
     if (pos > 0) {
       const lead = leadingActionRef.current;
       // ピン留め確定：距離が振り切り閾値を超えた（or 振り切りゾーン滞在）か、
-      // 距離が閾値未満でも速い右フリックなら確定。距離だけを唯一の条件にしない。
+      // 距離が閾値未満でも速い右フリックなら確定。距離だけを唯一の条件にはしないが、
+      // 速度側にも最低距離を課して、速いスワイプで浅いうちに確定しないようにする。
       if (
         lead &&
-        (wasZone || pos >= rowW * LEAD_COMMIT_RATIO || v >= LEAD_COMMIT_VELOCITY)
+        (wasZone ||
+          pos >= rowW * LEAD_COMMIT_RATIO ||
+          (v >= LEAD_COMMIT_VELOCITY && pos >= rowW * LEAD_COMMIT_MIN_RATIO))
       ) {
         springTo(0, v); // 振り切り/フリック → 実行してスナップで戻す
         lead.onClick();
