@@ -73,15 +73,19 @@ const OVERSHOOT_MAX = 12;
 const WHEEL_SENSITIVITY = 0.4;
 const WHEEL_AXIS_RATIO = 1.5;
 const WHEEL_START_PX = 30;
-// スクロールが止まったとみなすまでの待ち時間。トラックパッドには touchend に
-// あたる「操作終了」イベントが無いため、これで代用するしかない。
-// ここは短くする。長いと、指を離してからスナップが始まるまで画面が完全に静止し、
-// 「動かした → 固まる → 突然飛ぶ」という見え方になる（実測で 361ms の無反応が
-// 毎回発生していた＝カクつきの主因）。
-// かつて 360ms まで延ばしていたのは、スナップ中の再接触が古い基準を掴んで往復
-// するのを避けるための対症療法だったが、その原因（restPosRef の確定が収束後
-// だった件）は springTo 側で直したので、短くしてよい。
-const WHEEL_IDLE_MS = 120;
+// 操作終了とみなすまでの「保険」の待ち時間。トラックパッドには touchend に
+// あたるイベントが無いための代用だが、これを固定時間として待つと、指を離した後に
+// content が目標へ追いついて静止 → この時間まで待つ → スナップ、という「追いついて
+// 止まる → 待つ → 飛ぶ」が必ず入り、境界付近で一瞬固まって見えた（実測で約57ms）。
+// そこで通常の終了判定は WHEEL_SETTLE_QUIET_MS 側（追従ループ内で、追いついた瞬間に
+// スナップ開始）で行い、こちらはループが回っていない等の保険としてだけ残す。
+const WHEEL_IDLE_MS = 90;
+// 追従ループ内での「操作が終わった」判定。最後に wheel が届いてからこの時間が過ぎ、
+// かつ content が目標に追いついていたら、その場でスナップへ移す（固定時間を待たない）。
+// 指を離すと content が追いつくのとほぼ同時にスナップが始まるので、間の静止が消える。
+// 短いほど固まりが減るが、短すぎると操作途中の一瞬の間をも終了と誤判定する。
+// この端末では wheel が 8〜9ms 間隔で届くので、40ms は 5 イベントぶんの空白＝十分な間。
+const WHEEL_SETTLE_QUIET_MS = 40;
 // 速度を「操作終了時の値」として信用できる時間(ms)。wheel には離した瞬間が無く、
 // 入力が途切れた後も最後に測った速度が残り続ける。そのまま使うと、指を止めてから
 // かなり経っているのにフリック扱いになり、開閉の判定がひっくり返ったうえ、バネに
@@ -91,12 +95,12 @@ const WHEEL_IDLE_MS = 120;
 const WHEEL_VELOCITY_GRACE_MS = 260;
 // トラックパッドのみに掛ける追従率（1フレームあたり）。
 // タッチの touchmove は画面のリフレッシュに同期して届くので 1:1 で滑らかだが、
-// wheel は 60Hz 前後かつ不揃いなまとまりで届くため、120Hz(ProMotion) では
-// 「イベントが来ないフレーム」が生まれてカクついて見える。毎フレーム目標値へ
-// 少しずつ寄せることで、イベントの無いフレームも中間位置が描かれて滑らかになる。
-// 低すぎると寄りきるまでに時間が掛かり動き出しが鈍く感じるので、段送りが消える
-// 範囲でなるべく高くする（2〜3フレームで目標に追いつく程度）。
-const WHEEL_SMOOTHING = 0.55;
+// wheel はイベントの来ないフレームが生まれ得るため、毎フレーム目標値へ少しずつ
+// 寄せることで、イベントの無いフレームも中間位置が描かれて滑らかになる。
+// 実測ではこの端末の wheel は 8〜9ms 間隔（イベント過剰）だったので、平滑化は主に
+// 「指との遅れ」を決める。高いほど指に張り付き、離した後の追いつきも速い＝間の
+// 静止が短い。低すぎると遅れて動きがもたつく。0.7 で遅れ・追いつきとも十分に速い。
+const WHEEL_SMOOTHING = 0.7;
 
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
@@ -178,6 +182,8 @@ export default function SwipeRow({
   const wheelEngagedRef = useRef(false);
   // 最後に wheel が届いた時刻。速度をどれだけ信用するかの判断に使う。
   const wheelLastEventTRef = useRef(0);
+  // 追従ループから「操作終了→スナップ」を呼ぶための控え（定義は後段）。
+  const endWheelGestureRef = useRef<(reason: string) => void>(() => {});
   const wheelBaseRef = useRef(0); // wheel ジェスチャー開始時の位置（反対側へ越えさせない判定用）
   // wheel は「差分」でしか届かないので、生の積算値と、それに壁/抵抗を適用した
   // 目標値を分けて持つ。減衰後の値を次の計算に入れ直すと抵抗が二重三重に掛かり、
@@ -362,6 +368,15 @@ export default function SwipeRow({
         x: r2(x),
       });
       moveTo(x);
+      // 操作終了の判定はここで行う（固定時間のタイマーを待たない）。最後の入力から
+      // 十分な間が空き、かつ content が目標に追いついたら、その瞬間にスナップへ移す。
+      // 指を離すと「追いつく」のとほぼ同時にスナップが始まるので、間の静止が消える。
+      // active dragging 中は毎フレーム wheel が届いていて quiet が伸びないので発火しない。
+      const quiet = now - wheelLastEventTRef.current;
+      if (quiet >= WHEEL_SETTLE_QUIET_MS && Math.abs(target - x) < 1) {
+        endWheelGestureRef.current("caught-up");
+        return; // ループはここで終了（settle→spring が新しい rAF を張る）
+      }
       rafRef.current = draggingRef.current ? requestAnimationFrame(step) : null;
     };
     rafRef.current = requestAnimationFrame(step);
@@ -511,6 +526,41 @@ export default function SwipeRow({
   const settleRef = useRef(settle);
   settleRef.current = settle;
 
+  // wheel ジェスチャーの終了処理（追従ループの追いつき検知・保険のidleタイマー、
+  // どちらから呼ばれても同じ。二重に走らないよう、既に終了していれば何もしない）。
+  // 速度は「最後に入力が届いた時点」の値なので、そこからの経過時間ぶん弱めてから
+  // スナップ判定に渡す（止めた操作がフリック扱いになるのを防ぐ）。
+  const endWheelGesture = useCallback((reason: string) => {
+    if (!draggingRef.current && !wheelEngagedRef.current) return;
+    if (wheelTimer.current) {
+      clearTimeout(wheelTimer.current);
+      wheelTimer.current = null;
+    }
+    wheelAccum.current = 0;
+    wheelEngagedRef.current = false;
+    draggingRef.current = false;
+    const age = performance.now() - wheelLastEventTRef.current;
+    const decay = Math.max(0, 1 - age / WHEEL_VELOCITY_GRACE_MS);
+    dbg("idle", {
+      reason,
+      age: r2(age),
+      target: r2(wheelTargetRef.current),
+      offset: r2(offsetRef.current),
+      raw: r2(lastVelRef.current),
+      decay: r2(decay),
+      used: r2(lastVelRef.current * decay),
+    });
+    // 開始位置(base)を渡すことで、開いていた状態からのスクロールは必ずリストへ戻す。
+    // 位置判定は補間の途中ではなく指示された到達点(target)で行う。バネの開始位置は
+    // 表示中の offsetRef なので見た目は連続したまま。
+    settleRef.current(
+      wheelBaseRef.current,
+      wheelTargetRef.current,
+      lastVelRef.current * decay,
+    );
+  }, []);
+  endWheelGestureRef.current = endWheelGesture;
+
   // 再レンダー後、DOM を現在の offsetRef に合わせ直す（ドラッグ/バネの最中に親が
   // 再レンダーしても位置が飛ばないための保険）。paint 前に実行。静止（0）なら
   // JSX の初期 style で正しいので書き込まない（一覧再レンダー時に全行へ書かない）。
@@ -603,37 +653,11 @@ export default function SwipeRow({
         pushSample(next); // touch と同じ方式で速度を計測（フリック判定用）
       }
 
+      // 保険のタイマー。通常は追従ループの追いつき検知が先にスナップを始めるが、
+      // 何らかの理由でループが回っていない場合に備えて残す（同じ終了処理を呼ぶ）。
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
       wheelTimer.current = setTimeout(() => {
-        dbg("idle", {
-          sinceLastWheel: r2(performance.now() - getLastWheelT()),
-          target: r2(wheelTargetRef.current),
-          offset: r2(offsetRef.current),
-          vel: r2(lastVelRef.current),
-        });
-        wheelAccum.current = 0;
-        wheelEngagedRef.current = false;
-        draggingRef.current = false;
-        // 速度は「最後に入力が届いた時点」の値なので、そこからの経過時間ぶん弱める。
-        // wheel には離した瞬間が無く、入力が途切れても最後の速度が残り続けるため、
-        // そのまま使うと止めたはずの操作がフリック扱いになり、判定がひっくり返る。
-        const age = performance.now() - wheelLastEventTRef.current;
-        const decay = Math.max(0, 1 - age / WHEEL_VELOCITY_GRACE_MS);
-        dbg("decay", {
-          age: r2(age),
-          raw: r2(lastVelRef.current),
-          decay: r2(decay),
-          used: r2(lastVelRef.current * decay),
-        });
-        // touch と同じスナップ判定に集約。開始位置を base に渡すことで、開いていた
-        // 状態からのスクロールは必ずリストへ戻す（反対側は出さない）。
-        // 位置判定は補間の途中ではなく、実際に指示された到達点(target)で行う。
-        // バネの開始位置は表示中の offsetRef なので見た目は連続したまま。
-        settleRef.current(
-          wheelBaseRef.current,
-          wheelTargetRef.current,
-          lastVelRef.current * decay,
-        );
+        endWheelGestureRef.current("idle-timeout");
       }, WHEEL_IDLE_MS);
     };
 
