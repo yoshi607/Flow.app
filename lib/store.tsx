@@ -505,16 +505,33 @@ export function NotesProvider({
       if (next === prev) return;
       // 先に画面へ反映し、保存に失敗したら元へ戻す
       setShortNoteDaysState(next);
-      const { error } = await supabase
-        .from("user_settings")
-        .upsert(
-          { user_id: userId, short_note_days: next },
-          { onConflict: "user_id" },
-        );
+      let error: {
+        message: string;
+        code?: string;
+        details?: string;
+        hint?: string;
+      } | null = null;
+      try {
+        ({ error } = await supabase
+          .from("user_settings")
+          .upsert(
+            { user_id: userId, short_note_days: next },
+            { onConflict: "user_id" },
+          ));
+      } catch (e) {
+        // オフライン等で fetch 自体が失敗した場合
+        error = { message: e instanceof Error ? e.message : "通信エラー" };
+      }
       if (error) {
-        console.error("設定の保存に失敗:", error.message);
+        // 原因を切り分けられるよう、コード・詳細も含めてそのまま残す
+        console.error("設定の保存に失敗:", error);
         setShortNoteDaysState(prev);
-        throw new Error(error.message);
+        // 画面側で原因別の案内を出せるよう code を持たせて投げる
+        throw Object.assign(new Error(error.message), {
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
       }
     },
     [supabase, userId, shortNoteDays],

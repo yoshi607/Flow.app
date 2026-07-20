@@ -16,6 +16,30 @@ import { IconClose } from "./icons";
 // 短期メモの日数のよく使う候補（これ以外は数値入力で指定できる）
 const DAY_PRESETS = [1, 3, 7, 14, 30];
 
+// 保存に失敗したときの案内文。
+// 「通信環境を確認してください」だけだと、実際は DB 側の設定漏れ
+// （マイグレーション未適用など）でも通信のせいに見えてしまうため、
+// エラーコードごとに次にやることが分かる文言を出す。
+function saveErrorMessage(err: unknown): string {
+  const e = err as { message?: string; code?: string };
+  const raw = e?.message ? `（${e.message}）` : "";
+  switch (e?.code) {
+    // テーブルが無い / PostgREST がまだ認識していない
+    case "PGRST205":
+    case "42P01":
+      return `保存先のテーブルが見つかりません。Supabase で 0007_user_settings.sql を実行してください。実行直後の場合は1分ほど待って再試行してください。${raw}`;
+    // GRANT 不足 / RLS で弾かれた
+    case "42501":
+      return `保存の権限がありません。Supabase で 0007_user_settings.sql（GRANT と RLS ポリシー）を最後まで実行してください。${raw}`;
+    case "23514":
+      return `その日数は保存できません。${MIN_SHORT_NOTE_DAYS}〜${MAX_SHORT_NOTE_DAYS} の範囲で指定してください。${raw}`;
+    default:
+      return e?.message
+        ? `設定の保存に失敗しました${raw}`
+        : "設定の保存に失敗しました。通信環境を確認してください。";
+  }
+}
+
 export default function SettingsDialog({
   userEmail,
   onClose,
@@ -53,8 +77,8 @@ export default function SettingsDialog({
     setDaysSaving(true);
     try {
       await setShortNoteDays(n);
-    } catch {
-      setDaysError("設定の保存に失敗しました。通信環境を確認してください。");
+    } catch (err) {
+      setDaysError(saveErrorMessage(err));
     } finally {
       setDaysSaving(false);
     }
