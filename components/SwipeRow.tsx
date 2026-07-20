@@ -74,10 +74,21 @@ const WHEEL_SENSITIVITY = 0.4;
 const WHEEL_AXIS_RATIO = 1.5;
 const WHEEL_START_PX = 30;
 // スクロールが止まったとみなすまでの待ち時間。トラックパッドには touchend に
-// あたる「操作終了」イベントが無いため、これで代用するしかない。短いと、しきい値
-// 付近でゆっくり合わせているときの一瞬の間を「終了」と誤判定してスナップを始めて
-// しまい、その直後の入力がバネに割り込んで往復する（＝境界付近でカクつく）。
-const WHEEL_IDLE_MS = 360;
+// あたる「操作終了」イベントが無いため、これで代用するしかない。
+// ここは短くする。長いと、指を離してからスナップが始まるまで画面が完全に静止し、
+// 「動かした → 固まる → 突然飛ぶ」という見え方になる（実測で 361ms の無反応が
+// 毎回発生していた＝カクつきの主因）。
+// かつて 360ms まで延ばしていたのは、スナップ中の再接触が古い基準を掴んで往復
+// するのを避けるための対症療法だったが、その原因（restPosRef の確定が収束後
+// だった件）は springTo 側で直したので、短くしてよい。
+const WHEEL_IDLE_MS = 120;
+// 速度を「操作終了時の値」として信用できる時間(ms)。wheel には離した瞬間が無く、
+// 入力が途切れた後も最後に測った速度が残り続ける。そのまま使うと、指を止めてから
+// かなり経っているのにフリック扱いになり、開閉の判定がひっくり返ったうえ、バネに
+// 大きな初速が入って弾かれる（実測で 361ms 後に v=2.1px/ms が使われていた）。
+// 経過時間に比例して速度を弱め、この時間を過ぎたら 0 とみなす。
+// WHEEL_IDLE_MS より十分に長くしないと、本物のフリックまで殺してしまう。
+const WHEEL_VELOCITY_GRACE_MS = 260;
 // トラックパッドのみに掛ける追従率（1フレームあたり）。
 // タッチの touchmove は画面のリフレッシュに同期して届くので 1:1 で滑らかだが、
 // wheel は 60Hz 前後かつ不揃いなまとまりで届くため、120Hz(ProMotion) では
@@ -162,6 +173,11 @@ export default function SwipeRow({
   const rowWidthRef = useRef(0); // ジェスチャー開始時にキャッシュした行幅
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wheelAccum = useRef(0);
+  // ジェスチャーが始まっているか。位置ではなくこのラッチで見る（位置が 0 に
+  // 張り付いた瞬間に抜けてしまうのを防ぐ）。idle で false に戻す。
+  const wheelEngagedRef = useRef(false);
+  // 最後に wheel が届いた時刻。速度をどれだけ信用するかの判断に使う。
+  const wheelLastEventTRef = useRef(0);
   const wheelBaseRef = useRef(0); // wheel ジェスチャー開始時の位置（反対側へ越えさせない判定用）
   // wheel は「差分」でしか届かないので、生の積算値と、それに壁/抵抗を適用した
   // 目標値を分けて持つ。減衰後の値を次の計算に入れ直すと抵抗が二重三重に掛かり、
@@ -365,6 +381,12 @@ export default function SwipeRow({
     (target: number, v0 = 0) => {
       cancelRaf();
       draggingRef.current = false;
+      // 「開く/戻す」はこの関数が呼ばれた時点で確定している。バネはその結果を
+      // 見せるだけのアニメーションなので、ルール判定の基準（静止位置）はここで
+      // 確定させる。収束しきるまで前の位置を指したままにすると、バネの最中に
+      // 触られたときに「もう決まっている行き先」と食い違う基準で判定してしまい、
+      // 反対側クランプの壁に当たって動かなくなる。
+      restPosRef.current = target;
       let x = offsetRef.current;
       let v = v0 * 1000; // px/ms -> px/s
       // 計測: どこから・どの初速で・どこへ向かうか
@@ -396,7 +418,7 @@ export default function SwipeRow({
         if (Math.abs(x - target) < 0.5 && Math.abs(v) < 8) {
           rafRef.current = null;
           offsetRef.current = target;
-          restPosRef.current = target; // ここで初めて「静止位置」が確定する
+          restPosRef.current = target; // 確定は springTo 開始時。ここは念のため
           applyOffsetRef.current(target);
           setActive(false); // 静止したらレイヤーを解放する
           setRestOffset(target); // 再レンダー時の初期 style を合わせる
@@ -526,8 +548,12 @@ export default function SwipeRow({
       e.preventDefault();
 
       wheelAccum.current += e.deltaX;
+      // 一度始まったジェスチャーは、途切れる（idle）まで始まったままにする。
+      // 位置で判定すると、clampPosition が位置をちょうど 0 に張り付かせた瞬間に
+      // 抜けてしまい、入力が届いているのに目標が更新されない空白フレームが出る。
       const engaged =
-        offsetRef.current !== 0 || Math.abs(wheelAccum.current) > WHEEL_START_PX;
+        wheelEngagedRef.current || Math.abs(wheelAccum.current) > WHEEL_START_PX;
+      wheelLastEventTRef.current = performance.now();
 
       // 計測: 原因3 = ジェスチャー中盤に engaged=false が挟まらないか。
       // deltaX のバースト具合（evDt が数ms と数百ms を行き来する）もここで見る。
@@ -551,6 +577,7 @@ export default function SwipeRow({
 
       if (engaged) {
         beginOpen();
+        wheelEngagedRef.current = true;
         if (!draggingRef.current) {
           // ここはバネの途中で割り込むこともある。位置の起点（wheelRaw）は見た目の
           // 連続性のため現在位置にするが、開閉ルールの基準（wheelBase）は必ず
@@ -585,7 +612,19 @@ export default function SwipeRow({
           vel: r2(lastVelRef.current),
         });
         wheelAccum.current = 0;
+        wheelEngagedRef.current = false;
         draggingRef.current = false;
+        // 速度は「最後に入力が届いた時点」の値なので、そこからの経過時間ぶん弱める。
+        // wheel には離した瞬間が無く、入力が途切れても最後の速度が残り続けるため、
+        // そのまま使うと止めたはずの操作がフリック扱いになり、判定がひっくり返る。
+        const age = performance.now() - wheelLastEventTRef.current;
+        const decay = Math.max(0, 1 - age / WHEEL_VELOCITY_GRACE_MS);
+        dbg("decay", {
+          age: r2(age),
+          raw: r2(lastVelRef.current),
+          decay: r2(decay),
+          used: r2(lastVelRef.current * decay),
+        });
         // touch と同じスナップ判定に集約。開始位置を base に渡すことで、開いていた
         // 状態からのスクロールは必ずリストへ戻す（反対側は出さない）。
         // 位置判定は補間の途中ではなく、実際に指示された到達点(target)で行う。
@@ -593,7 +632,7 @@ export default function SwipeRow({
         settleRef.current(
           wheelBaseRef.current,
           wheelTargetRef.current,
-          lastVelRef.current,
+          lastVelRef.current * decay,
         );
       }, WHEEL_IDLE_MS);
     };
