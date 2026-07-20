@@ -40,20 +40,19 @@ const LEAD_COMMIT_VELOCITY = 0.9;
 // 横方向の意図を判定する不感帯(px)。これを超えるまでは反応しない。
 const AXIS_DEADZONE = 6;
 // フリック判定の速度しきい値(px/ms)。これ以上の速さで離すと距離が足りなくても開閉。
-const FLICK_VELOCITY = 0.35;
+const FLICK_VELOCITY = 0.3;
 // 速度を計測する時間窓(ms)。「指を離す直前」の実移動量から算出する。
 // EWMA だと短く速いフリックでサンプル数が足りず速度を大幅に過小評価してしまい、
 // フリックと判定されない → 距離も閾値未満 → リストへ戻る（＝スライド方向と逆に
 // 動いて見える）ため、直近ウィンドウの実移動量方式にしている。
 const VELOCITY_WINDOW_MS = 100;
-// 指を離した後の収束バネ（ほぼ臨界減衰＝オーバーシュートしにくい）。
-const SPRING_K = 220;
-const SPRING_C = 30;
-// ドラッグ中の「なめし」係数。毎フレーム、表示位置(currentX)を指の生座標
-// (targetX)へこの割合だけ近づける。1 に近いほど吸い付き、低いほど滑らか（ただし
-// 遅れて見える）。60fps 1フレームあたりの追従率として扱い、実 fps に依らず一定に
-// なるよう dt で正規化する。
-const SMOOTHING_FACTOR = 0.35;
+// 指を離した後の収束バネ。減衰比 ζ = c / (2√k) ≈ 0.81（狙い 0.75〜0.85）にして、
+// わずかに行き過ぎてから吸い付く「バネ感」を残す（等速的な ease 系にはしない）。
+const SPRING_K = 260;
+const SPRING_C = 26;
+// 行き過ぎ（オーバーシュート）の上限(px)。跳ね返りは見せたいが、大きいと反対側の
+// ボタンやアクション群の外側の隙間が見えてしまうので「わずかな跳ね返り」に留める。
+const OVERSHOOT_MAX = 12;
 
 // --- トラックパッド(2本指スクロール) ---
 const WHEEL_SENSITIVITY = 0.4;
@@ -65,6 +64,13 @@ const WHEEL_IDLE_MS = 240;
 
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
+
+// フル表示幅を超えて引いたぶんの抵抗（ラバーバンド）。
+//   実際の移動量 = フル表示幅 + 超過量 / (1 + 超過量 / 画面幅)
+// 引くほど重くなり、画面幅ぶん引いても超過は半分までしか進まない。
+function rubberBand(over: number, screenW: number) {
+  return over / (1 + over / Math.max(1, screenW));
+}
 
 // 振り切りの合図（対応端末のみ・iOS は無視される）。
 function fireHaptic() {
@@ -112,14 +118,14 @@ export default function SwipeRow({
   const leadBtnRef = useRef<HTMLButtonElement>(null);
   const actionBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const offsetRef = useRef(0); // 表示位置 currentX（真の値）。DOM はこれを反映する。
-  const targetRef = useRef(0); // 指/トラックパッドの生座標 targetX（毎フレーム追う先）
-  const draggingRef = useRef(false); // ドラッグ中（なめしループを回すべきか）
+  const offsetRef = useRef(0); // 現在位置。ドラッグ中は指の座標そのもの。
+  const draggingRef = useRef(false);
   const committingRef = useRef(false); // 振り切りゾーンに入っているか
-  const rafRef = useRef<number | null>(null); // なめしループ or バネの rAF id
-  const lastFrameRef = useRef(0); // なめしループの前フレーム時刻
-  const dispVelRef = useRef(0); // 表示位置の速度(px/ms)。離した後のバネ初速に使う
-  const start = useRef({ x: 0, y: 0, base: 0 });
+  const rafRef = useRef<number | null>(null); // バネの rAF id
+  const screenWidthRef = useRef(0); // ラバーバンド計算用の画面幅
+  // slop = 不感帯を超えるまでに動いた分。これを差し引いて追従を始めることで、
+  // 追従開始の瞬間に不感帯ぶん（6px）だけ行が飛ぶのを防ぐ。
+  const start = useRef({ x: 0, y: 0, base: 0, slop: 0 });
   const axis = useRef<"none" | "x" | "y">("none");
   const samplesRef = useRef<{ x: number; t: number }[]>([]); // 速度算出用の位置履歴
   const lastVelRef = useRef(0); // 直近の指/トラックパッド速度(px/ms)。フリック判定に使う
@@ -205,49 +211,25 @@ export default function SwipeRow({
     }
   }, []);
 
-  // ドラッグ中のなめしループ。touchmove/wheel は生座標を targetRef に入れるだけで、
-  // 実際の表示更新はこのループが 1フレーム1回だけ行う（＝イベント多発をフレームに
-  // 集約）。毎フレーム、表示位置 currentX を targetX へ SMOOTHING_FACTOR の割合だけ
-  // 近づけてから DOM に反映する（意図的な「なめし」）。振り切り合図と表示速度も
-  // ここで更新する。すでに回っているなら二重起動しない。
-  const startDragLoop = useCallback(() => {
-    if (draggingRef.current) return;
-    cancelRaf();
-    draggingRef.current = true;
-    lastFrameRef.current = performance.now();
-    const step = (now: number) => {
-      let dt = now - lastFrameRef.current;
-      lastFrameRef.current = now;
-      if (dt <= 0) dt = 16.6667;
-      if (dt > 40) dt = 40;
-      // 実 fps に依らず一定になるよう指数補間を dt 正規化する。
-      const alpha = 1 - Math.pow(1 - SMOOTHING_FACTOR, dt / 16.6667);
-      const prev = offsetRef.current;
-      let x = prev + (targetRef.current - prev) * alpha;
-      if (Math.abs(targetRef.current - x) < 0.1) x = targetRef.current;
-      // 表示位置の速度（バネ初速用・軽く平滑化）
-      const inst = (x - prev) / dt;
-      dispVelRef.current = dispVelRef.current * 0.5 + inst * 0.5;
-      offsetRef.current = x;
-      applyOffsetRef.current(x);
-      // 振り切りゾーンの出入りを「表示位置」で監視（合図と見た目を一致させる）
-      if (leadingActionRef.current && x > 0) {
-        const inZone = x >= rowWidthRef.current * LEAD_COMMIT_RATIO;
-        if (inZone !== committingRef.current) {
-          committingRef.current = inZone;
-          if (inZone) fireHaptic();
-        }
-      } else if (committingRef.current) {
-        committingRef.current = false;
+  // ドラッグ中の 1:1 追従。イベント内でそのまま transform を書く（rAF を挟むと
+  // 次フレームまで書き込みが遅れて指から離れて見えるため挟まない。ブラウザは
+  // paint 時に最後の値だけ描くので、書き込みが多発しても実質フレーム集約になる）。
+  // ボタンの不透明度・拡大も applyOffset が同じ位置から補間するので、指の位置と
+  // 見た目は常に同期する（時間ベースのフェードは使わない）。
+  const moveTo = useCallback((x: number) => {
+    offsetRef.current = x;
+    applyOffsetRef.current(x);
+    // 振り切りゾーンの出入りを監視し、またいだ瞬間だけ合図を出す。
+    if (leadingActionRef.current && x > 0) {
+      const inZone = x >= rowWidthRef.current * LEAD_COMMIT_RATIO;
+      if (inZone !== committingRef.current) {
+        committingRef.current = inZone;
+        if (inZone) fireHaptic();
       }
-      if (draggingRef.current) {
-        rafRef.current = requestAnimationFrame(step);
-      } else {
-        rafRef.current = null;
-      }
-    };
-    rafRef.current = requestAnimationFrame(step);
-  }, [cancelRaf]);
+    } else if (committingRef.current) {
+      committingRef.current = false;
+    }
+  }, []);
 
   const springToRef = useRef<(target: number, v0?: number) => void>(() => {});
   const closeSelf = useCallback(() => {
@@ -255,20 +237,17 @@ export default function SwipeRow({
     springToRef.current(0, 0);
   }, []);
 
-  // 指を離した後の収束（バネ）。初速 v0(px/ms) を引き継ぐ。毎フレーム DOM を直接
-  // 書き換え、静止したときだけ state を同期する。途中で触れれば offsetRef から
-  // 現在位置を拾って追従再開できる。
+  // 指を離した後の収束（バネ）。リリース直前の指の速度 v0(px/ms) をそのまま初速と
+  // して渡す（静止状態から始めない）ので、慣性移動 → 着地が 1 つの連続した動きに
+  // なる。毎フレーム DOM を直接書き換え、静止したときだけ state を同期する。
+  // 途中で触れれば offsetRef から現在位置を拾って追従再開できる。
   const springTo = useCallback(
     (target: number, v0 = 0) => {
       cancelRaf();
-      draggingRef.current = false; // なめしループを止めてバネへ引き継ぐ
+      draggingRef.current = false;
       let x = offsetRef.current;
-      // target から離れる向きの初速は引き継がない。なめし係数が低いと、指を追い切る
-      // 前に離した表示速度が「開く側」へ残り、少しのスライドでも慣性で行き過ぎて
-      // 反対側のボタンが一瞬見える。target へ向かう勢いだけ残す。
-      if ((target - x) * v0 < 0) v0 = 0;
       let v = v0 * 1000; // px/ms -> px/s
-      // target を境に反対符号へは出さない（万一の行き過ぎでも反対側を露出させない）。
+      // どちら側から target へ向かうか。行き過ぎ（跳ね返り）はこの逆側に出る。
       const fromSign = Math.sign(x - target);
       let last = performance.now();
       const step = (now: number) => {
@@ -278,12 +257,14 @@ export default function SwipeRow({
         const a = -SPRING_K * (x - target) - SPRING_C * v;
         v += a * dt;
         x += v * dt;
-        if (fromSign > 0 && x < target) {
-          x = target;
-          v = 0;
-        } else if (fromSign < 0 && x > target) {
-          x = target;
-          v = 0;
+        // target を越えた行き過ぎは「わずかな跳ね返り」に制限する。
+        // （制限しないと、速いフリックで反対側のボタンや隙間が見えてしまう）
+        if (fromSign !== 0 && Math.sign(x - target) === -fromSign) {
+          const limit = target - fromSign * OVERSHOOT_MAX;
+          if (Math.abs(x - target) > OVERSHOOT_MAX) {
+            x = limit;
+            v = 0;
+          }
         }
         if (Math.abs(x - target) < 0.5 && Math.abs(v) < 8) {
           rafRef.current = null;
@@ -313,13 +294,11 @@ export default function SwipeRow({
   }, [closeSelf]);
 
   // 指/トラックパッドを離した/止めたときのスナップ判定（touch・wheel 共通）。
-  // base=ジェスチャー開始位置, pos=指の最終位置（＝生座標 targetRef。表示位置ではない）,
-  // v=フリック判定用の速度, springV=バネ初速。判定は「表示位置」ではなく「指の実際の
-  // 位置」で行う：なめし係数が低いと表示が指に追いつく前に離すため、表示位置で距離を
-  // 測ると実際の指の移動量を大幅に過小評価し、閉じ操作が閾値に届かず開き側へ戻る
-  // （少しのスライドで逆側に動いて見える）。バネの開始位置は従来どおり表示位置なので
-  // 見た目の連続性は保たれる。開いていた状態からは反対側を出さず必ずリストへ戻す。
-  const settle = (base: number, pos: number, v: number, springV: number) => {
+  // base=ジェスチャー開始位置, pos=最終位置（1:1 追従なので指の座標そのもの）,
+  // v=リリース直前の速度。距離と速度のハイブリッドで開閉を決め、その速度を
+  // そのままバネの初速として渡す。
+  // 開いていた状態からは反対側を出さず必ずリストへ戻す。
+  const settle = (base: number, pos: number, v: number) => {
     const rowW = rowWidthRef.current;
     const wasZone = committingRef.current;
     committingRef.current = false;
@@ -331,7 +310,7 @@ export default function SwipeRow({
       const towardClose = openLeft ? pos - base : base - pos; // 閉じ方向へ動いた量(px)
       const flickClose = openLeft ? v > FLICK_VELOCITY : v < -FLICK_VELOCITY;
       const openPos = openLeft ? -openWidth : leadWidth;
-      springTo(towardClose > 20 || flickClose ? 0 : openPos, springV);
+      springTo(towardClose > 20 || flickClose ? 0 : openPos, v);
       return;
     }
 
@@ -344,7 +323,7 @@ export default function SwipeRow({
         lead &&
         (wasZone || pos >= rowW * LEAD_COMMIT_RATIO || v >= LEAD_COMMIT_VELOCITY)
       ) {
-        springTo(0, springV); // 振り切り/フリック → 実行してスナップで戻す
+        springTo(0, v); // 振り切り/フリック → 実行してスナップで戻す
         lead.onClick();
         return;
       }
@@ -352,14 +331,14 @@ export default function SwipeRow({
       if (v > FLICK_VELOCITY) target = leadWidth;
       else if (v < -FLICK_VELOCITY) target = 0;
       else target = pos >= leadWidth / 2 ? leadWidth : 0;
-      springTo(target, springV);
+      springTo(target, v);
       return;
     }
     let target: number;
     if (v < -FLICK_VELOCITY) target = -openWidth;
     else if (v > FLICK_VELOCITY) target = 0;
     else target = pos <= -openWidth / 2 ? -openWidth : 0;
-    springTo(target, springV);
+    springTo(target, v);
   };
   const settleRef = useRef(settle);
   settleRef.current = settle;
@@ -379,6 +358,18 @@ export default function SwipeRow({
     [cancelRaf, closeSelf],
   );
 
+  // 開いている間だけ、行の外側のタップで同じバネで閉じる（排他制御）。
+  // 行の内側のタップは onClickCapture 側が閉じる担当。
+  useEffect(() => {
+    if (restOffset === 0) return;
+    const onDocDown = (e: PointerEvent) => {
+      const el = rowRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) closeSelf();
+    };
+    document.addEventListener("pointerdown", onDocDown, true);
+    return () => document.removeEventListener("pointerdown", onDocDown, true);
+  }, [restOffset, closeSelf]);
+
   // トラックパッドの横スクロール
   useEffect(() => {
     const el = rowRef.current;
@@ -394,39 +385,41 @@ export default function SwipeRow({
 
       if (engaged) {
         beginOpen();
-        // 生座標を targetRef に積むだけ。表示更新はなめしループが行う。
         if (!draggingRef.current) {
-          targetRef.current = offsetRef.current;
+          cancelRaf();
+          draggingRef.current = true;
           wheelBaseRef.current = offsetRef.current; // このジェスチャーの開始位置
           rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
+          screenWidthRef.current = window.innerWidth || rowWidthRef.current;
           resetSamples(offsetRef.current);
-          startDragLoop();
         }
         const rowW = rowWidthRef.current;
+        const screenW = screenWidthRef.current;
         const base = wheelBaseRef.current;
-        let next = targetRef.current - e.deltaX * WHEEL_SENSITIVITY;
+        let next = offsetRef.current - e.deltaX * WHEEL_SENSITIVITY;
         // 開いていた状態からのスクロールは反対側へ越えさせない（0 でクランプ）。
         if (base < 0 && next > 0) next = 0;
         if (base > 0 && next < 0) next = 0;
+        // フル表示幅を超えたぶんはラバーバンドで抵抗させる。
         const maxRight = leadingActionRef.current ? rowW : 0;
-        if (next > maxRight) next = maxRight;
-        if (next < -openWidth) next = -openWidth;
+        if (next > maxRight) next = maxRight + rubberBand(next - maxRight, screenW);
+        if (next < -openWidth) {
+          next = -(openWidth + rubberBand(-next - openWidth, screenW));
+        }
         pushSample(next); // touch と同じ方式で速度を計測（フリック判定用）
-        targetRef.current = next;
+        moveTo(next);
       }
 
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
       wheelTimer.current = setTimeout(() => {
         wheelAccum.current = 0;
-        draggingRef.current = false; // なめしループを止める
+        draggingRef.current = false;
         // touch と同じスナップ判定に集約。開始位置を base に渡すことで、開いていた
-        // 状態からのスクロールは必ずリストへ戻す（反対側は出さない）。位置判定は
-        // 指の実際の到達点(targetRef)で（表示位置は遅れるため）。
+        // 状態からのスクロールは必ずリストへ戻す（反対側は出さない）。
         settleRef.current(
           wheelBaseRef.current,
-          targetRef.current,
+          offsetRef.current,
           lastVelRef.current,
-          dispVelRef.current,
         );
       }, WHEEL_IDLE_MS);
     };
@@ -442,7 +435,8 @@ export default function SwipeRow({
     isTouch,
     disabled,
     beginOpen,
-    startDragLoop,
+    cancelRaf,
+    moveTo,
     pushSample,
     resetSamples,
   ]);
@@ -456,14 +450,14 @@ export default function SwipeRow({
     cancelRaf();
     draggingRef.current = false;
     const t = e.touches[0];
-    start.current = { x: t.clientX, y: t.clientY, base: offsetRef.current };
-    targetRef.current = offsetRef.current;
-    dispVelRef.current = 0;
+    start.current = { x: t.clientX, y: t.clientY, base: offsetRef.current, slop: 0 };
     axis.current = "none";
     resetSamples(offsetRef.current);
     committingRef.current = false;
-    // 行幅はジェスチャー中は不変なので開始時に一度だけ読む（毎フレームの読み取り回避）。
+    // 行幅・画面幅はジェスチャー中は不変なので開始時に一度だけ読む
+    // （毎フレームの読み取り＝レイアウト往復を避ける）。
     rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
+    screenWidthRef.current = window.innerWidth || rowWidthRef.current;
   }
 
   function onTouchMove(e: React.TouchEvent) {
@@ -475,32 +469,36 @@ export default function SwipeRow({
       axis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
       if (axis.current === "x") {
         beginOpen();
+        draggingRef.current = true;
+        // 不感帯ぶんを差し引いて追従を始める（差し引かないと、追従開始の瞬間に
+        // 不感帯の距離だけ行が飛び、それが「動き出しの引っ掛かり」に見える）。
+        start.current.slop = dx;
         // 横ドラッグが確定した時点を速度計測の起点にする（指を置いてから動かし
         // 始めるまでの待ち時間で速度が薄まらないように）。
         resetSamples(start.current.base);
-        startDragLoop(); // 生座標を追う「なめし」ループを開始
       }
     }
     if (axis.current !== "x") return;
 
-    // 生座標（rubber-band 済み）を targetRef に入れるだけ。実際の表示更新は
-    // なめしループが 1フレーム1回だけ行う。
-    let next = start.current.base + dx;
+    // 指の座標に 1:1 で一致させる（イージング・トランジションは一切かけない）。
+    let next = start.current.base + (dx - start.current.slop);
     const rowW = rowWidthRef.current;
+    const screenW = screenWidthRef.current;
     // 開いていた状態からのスワイプは反対側へ越えさせない（0 でクランプ）。
     // ＝1回のスライドでは「リストへ戻る」までで、反対側のボタンは出さない。
     if (start.current.base < 0 && next > 0) next = 0;
     if (start.current.base > 0 && next < 0) next = 0;
-    if (next > 0) {
-      if (!hasLead) next = next * 0.2;
-      else if (next > rowW) next = rowW + (next - rowW) * 0.2;
+    // フル表示幅を超えたぶんはラバーバンドで抵抗させる。リーディングアクションが
+    // 無い行は「0px より右」自体が超過なので、0 を基準に抵抗をかける。
+    const maxRight = hasLead ? rowW : 0;
+    if (next > maxRight) next = maxRight + rubberBand(next - maxRight, screenW);
+    if (next < -openWidth) {
+      next = -(openWidth + rubberBand(-next - openWidth, screenW));
     }
-    if (next < -openWidth) next = -openWidth + (next + openWidth) * 0.2;
 
     // 指の速度計測（フリック判定用・直近ウィンドウの実移動量）
     pushSample(next);
-
-    targetRef.current = next;
+    moveTo(next); // 1:1 追従（イベント内で即反映）
   }
 
   function onTouchEnd() {
@@ -509,15 +507,9 @@ export default function SwipeRow({
       return;
     }
     axis.current = "none";
-    draggingRef.current = false; // なめしループを止めてバネへ
-    // スナップ判定は指の実際の位置(targetRef)で行う（表示位置は係数が低いと遅れる）。
-    // フリック判定は指の速度、バネ初速は表示位置の速度（自然な引き継ぎ）を使う。
-    settle(
-      start.current.base,
-      targetRef.current,
-      lastVelRef.current,
-      dispVelRef.current,
-    );
+    draggingRef.current = false;
+    // 離した瞬間の速度を、開閉判定にもバネの初速にも使う（＝動きが途切れない）。
+    settle(start.current.base, offsetRef.current, lastVelRef.current);
   }
 
   // 初期 style（再レンダー時にこの静止位置で描く。以後の動きは applyOffset が上書き）。
