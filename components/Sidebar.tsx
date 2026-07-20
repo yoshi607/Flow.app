@@ -171,17 +171,20 @@ export default function Sidebar({
               )}
             </>
           )}
-        </div>
 
-        <div className="pt-3">
-          <button
-            className={rowClass(isActive({ type: "trash" }))}
-            onClick={() => onChangeView({ type: "trash" })}
-          >
-            <IconTrash className="h-4 w-4" />
-            <span className="flex-1">ゴミ箱</span>
-            <span className="text-xs text-neutral-400">{trashCount}</span>
-          </button>
+          {/* ゴミ箱はフォルダ一覧の一番下に、少し間をあけて置く。UI 上の並びだけの
+              話で、データ上はフォルダではない（View も type:"trash" のまま）。
+              フォルダを閉じていても使えるよう、開閉の外に出しておく。 */}
+          <div className="mt-2">
+            <button
+              className={rowClass(isActive({ type: "trash" }))}
+              onClick={() => onChangeView({ type: "trash" })}
+            >
+              <IconTrash className="h-4 w-4" />
+              <span className="flex-1">ゴミ箱</span>
+              <span className="text-xs text-neutral-400">{trashCount}</span>
+            </button>
+          </div>
         </div>
 
         {/* タグ一覧（折り返すチップ表示）。見出しのチェブロンで開閉できる */}

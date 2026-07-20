@@ -1,7 +1,7 @@
 // Tiptap 本文（HTML文字列）を扱うための小さなヘルパー群
 
 // エディタ（Tiptap）が保存する本文は、必ずブロック要素のタグから始まる
-// （段落 <p>、見出し <h1>〜<h3>、音声メモのコールアウト <div ...>）。
+// （段落 <p>、見出し <h1>〜<h3>、音声メモのコールアウト <div ...>、区切り線 <hr>）。
 // それ以外は「移行前のプレーンテキスト」とみなす（本文中に "<a>タグ" のような
 // 文字列が含まれるだけで誤判定しないよう、先頭一致のみで判定する）。
 //
@@ -10,8 +10,9 @@
 // ※ 属性で判定してはいけない。属性の出力順は保証されず、実際に
 //   <div data-session="..." data-type="transcript"> のように並ぶため、
 //   data-type を前提にした判定はすり抜ける。タグ名だけで判定すること。
+// ※ 空要素も来る（<hr>）。閉じ方が <hr> でも <hr/> でも拾えるよう / も許可する。
 export function isPlainText(body: string): boolean {
-  return !/^\s*<(p|h1|h2|h3|div)[\s>]/i.test(body);
+  return !/^\s*<(p|h1|h2|h3|div|hr)[\s/>]/i.test(body);
 }
 
 export function escapeHtml(text: string): string {

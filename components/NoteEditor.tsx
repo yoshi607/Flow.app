@@ -203,7 +203,7 @@ export default function NoteEditor({
         code: false,
         codeBlock: false,
         blockquote: false,
-        horizontalRule: false,
+        // 有効。行頭で --- と入力すると区切り線になる（StarterKit の入力ルール）。
         bulletList: false,
         orderedList: false,
         listItem: false,
