@@ -40,7 +40,12 @@ const LEAD_COMMIT_VELOCITY = 0.9;
 // 横方向の意図を判定する不感帯(px)。これを超えるまでは反応しない。
 const AXIS_DEADZONE = 6;
 // フリック判定の速度しきい値(px/ms)。これ以上の速さで離すと距離が足りなくても開閉。
-const FLICK_VELOCITY = 0.5;
+const FLICK_VELOCITY = 0.35;
+// 速度を計測する時間窓(ms)。「指を離す直前」の実移動量から算出する。
+// EWMA だと短く速いフリックでサンプル数が足りず速度を大幅に過小評価してしまい、
+// フリックと判定されない → 距離も閾値未満 → リストへ戻る（＝スライド方向と逆に
+// 動いて見える）ため、直近ウィンドウの実移動量方式にしている。
+const VELOCITY_WINDOW_MS = 100;
 // 指を離した後の収束バネ（ほぼ臨界減衰＝オーバーシュートしにくい）。
 const SPRING_K = 220;
 const SPRING_C = 30;
@@ -116,7 +121,8 @@ export default function SwipeRow({
   const dispVelRef = useRef(0); // 表示位置の速度(px/ms)。離した後のバネ初速に使う
   const start = useRef({ x: 0, y: 0, base: 0 });
   const axis = useRef<"none" | "x" | "y">("none");
-  const vel = useRef({ x: 0, t: 0, v: 0 }); // 指の速度(px/ms)。フリック判定に使う
+  const samplesRef = useRef<{ x: number; t: number }[]>([]); // 速度算出用の位置履歴
+  const lastVelRef = useRef(0); // 直近の指/トラックパッド速度(px/ms)。フリック判定に使う
   const rowWidthRef = useRef(0); // ジェスチャー開始時にキャッシュした行幅
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wheelAccum = useRef(0);
@@ -164,6 +170,33 @@ export default function SwipeRow({
   // 最新の applyOffset を安定した参照（ループ/バネ/レイアウト効果）から呼ぶための控え。
   const applyOffsetRef = useRef(applyOffset);
   applyOffsetRef.current = applyOffset;
+
+  // 位置サンプルを記録し、直近 VELOCITY_WINDOW_MS の実移動量から速度を更新する。
+  // 「指を離す直前の速度」を正しく取るための要（短く速いフリックでもサンプルが
+  // 1〜2 個あれば正しい速度が出る）。指を止めてから離した場合はウィンドウ内の
+  // 移動量が 0 になるので速度も 0 になり、距離での判定に自然に切り替わる。
+  const resetSamples = useCallback((x: number) => {
+    samplesRef.current = [{ x, t: performance.now() }];
+    lastVelRef.current = 0;
+  }, []);
+
+  const pushSample = useCallback((x: number) => {
+    const now = performance.now();
+    const s = samplesRef.current;
+    s.push({ x, t: now });
+    // ウィンドウ外のサンプルは 1 つだけ残して捨てる（dt=0 を避ける保険）。
+    while (s.length > 2 && now - s[1].t > VELOCITY_WINDOW_MS) s.shift();
+    const last = s[s.length - 1];
+    let first = s[0];
+    for (let i = s.length - 1; i >= 0; i--) {
+      if (last.t - s[i].t <= VELOCITY_WINDOW_MS) first = s[i];
+      else break;
+    }
+    // ウィンドウ内が 1 点しか無い（＝直前に長い静止があった）ときは 1 つ前を使う。
+    if (first === last && s.length >= 2) first = s[s.length - 2];
+    const dt = last.t - first.t;
+    lastVelRef.current = dt > 0 ? (last.x - first.x) / dt : 0;
+  }, []);
 
   const cancelRaf = useCallback(() => {
     if (rafRef.current != null) {
@@ -366,6 +399,7 @@ export default function SwipeRow({
           targetRef.current = offsetRef.current;
           wheelBaseRef.current = offsetRef.current; // このジェスチャーの開始位置
           rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
+          resetSamples(offsetRef.current);
           startDragLoop();
         }
         const rowW = rowWidthRef.current;
@@ -377,6 +411,7 @@ export default function SwipeRow({
         const maxRight = leadingActionRef.current ? rowW : 0;
         if (next > maxRight) next = maxRight;
         if (next < -openWidth) next = -openWidth;
+        pushSample(next); // touch と同じ方式で速度を計測（フリック判定用）
         targetRef.current = next;
       }
 
@@ -390,7 +425,7 @@ export default function SwipeRow({
         settleRef.current(
           wheelBaseRef.current,
           targetRef.current,
-          dispVelRef.current,
+          lastVelRef.current,
           dispVelRef.current,
         );
       }, WHEEL_IDLE_MS);
@@ -401,7 +436,16 @@ export default function SwipeRow({
       el.removeEventListener("wheel", onWheel);
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
     };
-  }, [openWidth, leadWidth, isTouch, disabled, beginOpen, startDragLoop]);
+  }, [
+    openWidth,
+    leadWidth,
+    isTouch,
+    disabled,
+    beginOpen,
+    startDragLoop,
+    pushSample,
+    resetSamples,
+  ]);
 
   if (!isTouch || disabled || (actions.length === 0 && !leadingAction)) {
     return <div className={className}>{children}</div>;
@@ -416,7 +460,7 @@ export default function SwipeRow({
     targetRef.current = offsetRef.current;
     dispVelRef.current = 0;
     axis.current = "none";
-    vel.current = { x: offsetRef.current, t: performance.now(), v: 0 };
+    resetSamples(offsetRef.current);
     committingRef.current = false;
     // 行幅はジェスチャー中は不変なので開始時に一度だけ読む（毎フレームの読み取り回避）。
     rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
@@ -431,6 +475,9 @@ export default function SwipeRow({
       axis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
       if (axis.current === "x") {
         beginOpen();
+        // 横ドラッグが確定した時点を速度計測の起点にする（指を置いてから動かし
+        // 始めるまでの待ち時間で速度が薄まらないように）。
+        resetSamples(start.current.base);
         startDragLoop(); // 生座標を追う「なめし」ループを開始
       }
     }
@@ -450,15 +497,8 @@ export default function SwipeRow({
     }
     if (next < -openWidth) next = -openWidth + (next + openWidth) * 0.2;
 
-    // 指の速度計測（フリック判定用・軽い平滑化）
-    const now = performance.now();
-    const dtv = now - vel.current.t;
-    if (dtv > 0) {
-      const inst = (next - vel.current.x) / dtv;
-      vel.current.v = vel.current.v * 0.4 + inst * 0.6;
-      vel.current.x = next;
-      vel.current.t = now;
-    }
+    // 指の速度計測（フリック判定用・直近ウィンドウの実移動量）
+    pushSample(next);
 
     targetRef.current = next;
   }
@@ -472,7 +512,12 @@ export default function SwipeRow({
     draggingRef.current = false; // なめしループを止めてバネへ
     // スナップ判定は指の実際の位置(targetRef)で行う（表示位置は係数が低いと遅れる）。
     // フリック判定は指の速度、バネ初速は表示位置の速度（自然な引き継ぎ）を使う。
-    settle(start.current.base, targetRef.current, vel.current.v, dispVelRef.current);
+    settle(
+      start.current.base,
+      targetRef.current,
+      lastVelRef.current,
+      dispVelRef.current,
+    );
   }
 
   // 初期 style（再レンダー時にこの静止位置で描く。以後の動きは applyOffset が上書き）。
