@@ -158,9 +158,6 @@ export default function NoteList({
         icon: <IconTrash />,
         className: "bg-red-600",
         keepOpen: true,
-        // ゴミ箱へ移すだけ（復元できる）ので、左に振り切っての実行を許可する。
-        // ゴミ箱内の「完全削除」は取り消せないため、あちらには付けない。
-        fullSwipe: true,
         onClick: () => onRequestDelete(note.id),
       },
     ];
@@ -267,9 +264,7 @@ export default function NoteList({
             >
             <button
               onClick={() => onSelect(note.id)}
-              // 角丸は外枠(SwipeRow)だけが持つ。ここに付けると、カードがズレたときに
-              // 丸角の隙間から背後の四角いアクションボタンが覗いてしまう。
-              className={`flow-press block w-full px-3 py-2.5 text-left ${
+              className={`flow-press block w-full rounded-2xl px-3 py-2.5 text-left ${
                 selectedId === note.id
                   ? "bg-brand-100 dark:bg-brand-500/20"
                   : "hover:bg-brand-100/60 dark:hover:bg-neutral-800/60"
