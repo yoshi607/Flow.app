@@ -308,7 +308,9 @@ export default function NoteList({
         <FolderPickerSheet
           currentFolderId={movingNote.folder_id}
           onPick={(folderId) => {
-            updateNote(movingNote.id, { folder_id: folderId }, true);
+            // フォルダは整理用の情報なので編集日時は動かさない（touch=false）。
+            // DB 側のトリガーも据え置くので、表示とサーバーの値がずれない。
+            updateNote(movingNote.id, { folder_id: folderId }, true, false);
             setMovingNote(null);
           }}
           onClose={() => setMovingNote(null)}
