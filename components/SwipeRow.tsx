@@ -126,6 +126,7 @@ export default function SwipeRow({
 
   const rowRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const trailWrapRef = useRef<HTMLDivElement>(null);
   const leadWrapRef = useRef<HTMLDivElement>(null);
   const leadBtnRef = useRef<HTMLButtonElement>(null);
   const actionBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -161,6 +162,12 @@ export default function SwipeRow({
   function applyOffset(x: number) {
     if (contentRef.current) {
       contentRef.current.style.transform = `translateX(${x}px)`;
+    }
+    // アクション領域はスワイプ量に合わせて広がる。ボタンが出そろった後も指と一緒に
+    // 動き続けられるようにするため（ここで止めると、ボタンが出た瞬間に動きが
+    // 止まって見える）。広がったぶんは一番左のボタンが吸収する。
+    if (trailWrapRef.current) {
+      trailWrapRef.current.style.width = `${Math.max(openWidth, -x)}px`;
     }
     // 左スワイプ（右側アクション）：右端が先に、手前ほど後にせり上がる
     const rr = openWidth > 0 ? Math.min(1, Math.max(0, -x) / openWidth) : 0;
@@ -244,10 +251,13 @@ export default function SwipeRow({
         // 出すものが無い方向。動かないことを伝えるため抵抗だけ残す。
         next = rubberBand(next, screenW);
       }
-      // アクション側は、ボタンが出そろう位置(openWidth)までは指と同じ速さで動かし、
-      // そこで止める。ここでラバーバンドを掛けると、ボタンが出そろった瞬間に
-      // 減速して「一度引っかかる」ように感じるため掛けない（速度は一定に保つ）。
-      if (next < -openWidth) next = -openWidth;
+      // アクション側は、ボタンが出そろった後も指と同じ速さで動き続ける。
+      // ここに壁を置くと（減速でも停止でも）ボタンが出た瞬間に引っかかって見える。
+      // アクション領域が一緒に広がるので隙間はできない。抵抗は行幅を超えてから。
+      const maxLeft = Math.max(openWidth, rowW);
+      if (next < -maxLeft) {
+        next = -(maxLeft + rubberBand(-next - maxLeft, screenW));
+      }
       return next;
     },
     [openWidth],
@@ -575,14 +585,25 @@ export default function SwipeRow({
       ref={rowRef}
       className={`flow-swipe-row relative overflow-hidden ${className}`}
     >
-      {/* 背後の（左スワイプ）アクション */}
-      <div className="absolute inset-y-0 right-0 flex">
+      {/* 背後の（左スワイプ）アクション。領域はスワイプ量に合わせて広がり、
+          広がったぶんは一番左のボタンが吸収する（ボタンが出そろった後も指と一緒に
+          動き続けられるようにするため。通常の範囲では見え方は変わらない）。 */}
+      <div
+        ref={trailWrapRef}
+        className="absolute inset-y-0 right-0 flex"
+        style={{ width: Math.max(openWidth, -restOffset) }}
+      >
         {actions.map((a, i) => {
           const p = Math.max(0, Math.min(1, nActions * rr0 - (nActions - 1 - i)));
           return (
             <div
               key={a.key}
-              style={{ width: actionWidth }}
+              style={{
+                width: actionWidth,
+                flexShrink: 0,
+                // 余った幅は一番左のボタンだけが受け取る
+                flexGrow: i === 0 ? 1 : 0,
+              }}
               className={`flex ${compact ? "p-0.5" : "p-1"}`}
             >
               <button
