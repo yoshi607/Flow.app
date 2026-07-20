@@ -62,9 +62,11 @@ const OVERSHOOT_MAX = 12;
 const WHEEL_SENSITIVITY = 0.4;
 const WHEEL_AXIS_RATIO = 1.5;
 const WHEEL_START_PX = 30;
-// スクロールが止まったとみなすまでの待ち時間。短いと連続スライドの途中の一瞬の
-// 間（momentum の谷）で「ジェスチャー終了」と誤判定してスナップ→カクつく。
-const WHEEL_IDLE_MS = 240;
+// スクロールが止まったとみなすまでの待ち時間。トラックパッドには touchend に
+// あたる「操作終了」イベントが無いため、これで代用するしかない。短いと、しきい値
+// 付近でゆっくり合わせているときの一瞬の間を「終了」と誤判定してスナップを始めて
+// しまい、その直後の入力がバネに割り込んで往復する（＝境界付近でカクつく）。
+const WHEEL_IDLE_MS = 360;
 // トラックパッドのみに掛ける追従率（1フレームあたり）。
 // タッチの touchmove は画面のリフレッシュに同期して届くので 1:1 で滑らかだが、
 // wheel は 60Hz 前後かつ不揃いなまとまりで届くため、120Hz(ProMotion) では
@@ -132,6 +134,11 @@ export default function SwipeRow({
   const actionBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const offsetRef = useRef(0); // 現在位置。ドラッグ中は指の座標そのもの。
+  // 直近で「収まった」位置（0 / -openWidth / leadWidth）。開閉のルール判定はこれを
+  // 基準にする。ドラッグの起点（1:1 の原点）とは役割が違うので必ず分けて持つこと。
+  // アニメーション途中の座標を基準にしてしまうと、「開いていた/閉じていた」の判定が
+  // 意味を失い、しきい値付近で開く/戻すがブレる。
+  const restPosRef = useRef(0);
   const draggingRef = useRef(false);
   const committingRef = useRef(false); // 振り切りゾーンに入っているか
   const rafRef = useRef<number | null>(null); // バネの rAF id
@@ -362,6 +369,7 @@ export default function SwipeRow({
         if (Math.abs(x - target) < 0.5 && Math.abs(v) < 8) {
           rafRef.current = null;
           offsetRef.current = target;
+          restPosRef.current = target; // ここで初めて「静止位置」が確定する
           applyOffsetRef.current(target);
           setActive(false); // 静止したらレイヤーを解放する
           setRestOffset(target); // 再レンダー時の初期 style を合わせる
@@ -483,9 +491,13 @@ export default function SwipeRow({
       if (engaged) {
         beginOpen();
         if (!draggingRef.current) {
+          // ここはバネの途中で割り込むこともある。位置の起点（wheelRaw）は見た目の
+          // 連続性のため現在位置にするが、開閉ルールの基準（wheelBase）は必ず
+          // 「静止位置」にする。途中の座標を基準にすると、しきい値付近で
+          // 開く/戻すの判定がブレて往復する。
           cancelRaf();
           draggingRef.current = true;
-          wheelBaseRef.current = offsetRef.current; // このジェスチャーの開始位置
+          wheelBaseRef.current = restPosRef.current; // ルール判定の基準＝静止位置
           wheelRawRef.current = offsetRef.current; // 生の積算はここから
           wheelTargetRef.current = offsetRef.current;
           rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
@@ -546,6 +558,8 @@ export default function SwipeRow({
     cancelRaf();
     draggingRef.current = false;
     const t = e.touches[0];
+    // base はドラッグの原点（1:1 の基準）。バネの途中で触っても飛ばないよう
+    // 現在位置にする。開閉ルールの基準は restPosRef（静止位置）を使う。
     start.current = { x: t.clientX, y: t.clientY, base: offsetRef.current };
     axis.current = "none";
     resetSamples(offsetRef.current);
@@ -581,7 +595,7 @@ export default function SwipeRow({
     // そのまま一致させる（不感帯は小さいので、ここで生じるズレは知覚されない）。
     // 壁と抵抗は「生の位置」に対して一度だけ適用する（wheel と共通の規則）。
     const raw = start.current.base + dx;
-    const next = clampPosition(raw, start.current.base);
+    const next = clampPosition(raw, restPosRef.current);
 
     // 指の速度計測（フリック判定用・直近ウィンドウの実移動量）
     pushSample(next);
@@ -596,7 +610,8 @@ export default function SwipeRow({
     axis.current = "none";
     draggingRef.current = false;
     // 離した瞬間の速度を、開閉判定にもバネの初速にも使う（＝動きが途切れない）。
-    settle(start.current.base, offsetRef.current, lastVelRef.current);
+    // 開閉ルールの基準は静止位置（ドラッグ原点ではない）。
+    settle(restPosRef.current, offsetRef.current, lastVelRef.current);
   }
 
   // 初期 style（再レンダー時にこの静止位置で描く。以後の動きは applyOffset が上書き）。
