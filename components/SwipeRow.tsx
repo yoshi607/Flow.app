@@ -41,7 +41,8 @@ const LEAD_COMMIT_VELOCITY = 1.2;
 const LEAD_COMMIT_MIN_RATIO = 0.55;
 
 // 横方向の意図を判定する不感帯(px)。これを超えるまでは反応しない。
-const AXIS_DEADZONE = 6;
+// 小さいほど動き出しが早く感じる。縦スクロールを奪わない範囲でなるべく小さく。
+const AXIS_DEADZONE = 4;
 // フリック判定の速度しきい値(px/ms)。これ以上の速さで離すと距離が足りなくても開閉。
 const FLICK_VELOCITY = 0.3;
 // 速度を計測する時間窓(ms)。「指を離す直前」の実移動量から算出する。
@@ -69,7 +70,9 @@ const WHEEL_IDLE_MS = 240;
 // wheel は 60Hz 前後かつ不揃いなまとまりで届くため、120Hz(ProMotion) では
 // 「イベントが来ないフレーム」が生まれてカクついて見える。毎フレーム目標値へ
 // 少しずつ寄せることで、イベントの無いフレームも中間位置が描かれて滑らかになる。
-const WHEEL_SMOOTHING = 0.35;
+// 低すぎると寄りきるまでに時間が掛かり動き出しが鈍く感じるので、段送りが消える
+// 範囲でなるべく高くする（2〜3フレームで目標に追いつく程度）。
+const WHEEL_SMOOTHING = 0.55;
 
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
@@ -132,9 +135,7 @@ export default function SwipeRow({
   const committingRef = useRef(false); // 振り切りゾーンに入っているか
   const rafRef = useRef<number | null>(null); // バネの rAF id
   const screenWidthRef = useRef(0); // ラバーバンド計算用の画面幅
-  // slop = 不感帯を超えるまでに動いた分。これを差し引いて追従を始めることで、
-  // 追従開始の瞬間に不感帯ぶん（6px）だけ行が飛ぶのを防ぐ。
-  const start = useRef({ x: 0, y: 0, base: 0, slop: 0 });
+  const start = useRef({ x: 0, y: 0, base: 0 });
   const axis = useRef<"none" | "x" | "y">("none");
   const samplesRef = useRef<{ x: number; t: number }[]>([]); // 速度算出用の位置履歴
   const lastVelRef = useRef(0); // 直近の指/トラックパッド速度(px/ms)。フリック判定に使う
@@ -513,7 +514,7 @@ export default function SwipeRow({
     cancelRaf();
     draggingRef.current = false;
     const t = e.touches[0];
-    start.current = { x: t.clientX, y: t.clientY, base: offsetRef.current, slop: 0 };
+    start.current = { x: t.clientX, y: t.clientY, base: offsetRef.current };
     axis.current = "none";
     resetSamples(offsetRef.current);
     committingRef.current = false;
@@ -533,9 +534,6 @@ export default function SwipeRow({
       if (axis.current === "x") {
         beginOpen();
         draggingRef.current = true;
-        // 不感帯ぶんを差し引いて追従を始める（差し引かないと、追従開始の瞬間に
-        // 不感帯の距離だけ行が飛び、それが「動き出しの引っ掛かり」に見える）。
-        start.current.slop = dx;
         // 横ドラッグが確定した時点を速度計測の起点にする（指を置いてから動かし
         // 始めるまでの待ち時間で速度が薄まらないように）。
         resetSamples(start.current.base);
@@ -544,8 +542,11 @@ export default function SwipeRow({
     if (axis.current !== "x") return;
 
     // 指の座標に 1:1 で一致させる（イージング・トランジションは一切かけない）。
+    // 不感帯ぶんは差し引かない：差し引くとその距離だけ「指は動いているのに行は
+    // 動かない」区間ができ、動き出しが遅く感じるため。確定した瞬間から指の位置に
+    // そのまま一致させる（不感帯は小さいので、ここで生じるズレは知覚されない）。
     // 壁と抵抗は「生の位置」に対して一度だけ適用する（wheel と共通の規則）。
-    const raw = start.current.base + (dx - start.current.slop);
+    const raw = start.current.base + dx;
     const next = clampPosition(raw, start.current.base);
 
     // 指の速度計測（フリック判定用・直近ウィンドウの実移動量）
