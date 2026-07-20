@@ -128,11 +128,11 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="flex rounded-lg bg-neutral-200 dark:bg-neutral-800 p-1 mb-5 text-sm">
+        <div className="flex rounded-lg bg-neutral-200 p-1 mb-5 text-sm">
           <button
             onClick={() => setMode("signin")}
             className={`flex-1 py-1.5 rounded-md transition ${
-              mode === "signin" ? "bg-white dark:bg-neutral-950 shadow" : ""
+              mode === "signin" ? "bg-white shadow" : ""
             }`}
           >
             ログイン
@@ -140,7 +140,7 @@ export default function LoginPage() {
           <button
             onClick={() => setMode("signup")}
             className={`flex-1 py-1.5 rounded-md transition ${
-              mode === "signup" ? "bg-white dark:bg-neutral-950 shadow" : ""
+              mode === "signup" ? "bg-white shadow" : ""
             }`}
           >
             新規登録
@@ -148,7 +148,7 @@ export default function LoginPage() {
           <button
             onClick={() => setMode("magic")}
             className={`flex-1 py-1.5 rounded-md transition ${
-              mode === "magic" ? "bg-white dark:bg-neutral-950 shadow" : ""
+              mode === "magic" ? "bg-white shadow" : ""
             }`}
           >
             リンク
@@ -168,7 +168,7 @@ export default function LoginPage() {
             required
             autoComplete="username"
             placeholder="メールアドレス"
-            className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
           />
           {mode !== "magic" && mode !== "reset" && (
             <>
@@ -181,7 +181,7 @@ export default function LoginPage() {
                 placeholder={
                   mode === "signup" ? "パスワード（10文字以上）" : "パスワード"
                 }
-                className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
+                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"
               />
               {mode === "signup" && (
                 <p className="text-xs text-neutral-400">
@@ -214,7 +214,7 @@ export default function LoginPage() {
               setError(null);
               setMessage(null);
             }}
-            className="mt-3 w-full text-center text-sm text-brand-600 hover:underline dark:text-brand-400"
+            className="mt-3 w-full text-center text-sm text-brand-600 hover:underline"
           >
             パスワードをお忘れですか？
           </button>
@@ -233,23 +233,23 @@ export default function LoginPage() {
         )}
 
         <div className="flex items-center gap-3 my-4 text-xs text-neutral-400">
-          <div className="flex-1 h-px bg-neutral-300 dark:bg-neutral-700" />
+          <div className="flex-1 h-px bg-neutral-300" />
           または
-          <div className="flex-1 h-px bg-neutral-300 dark:bg-neutral-700" />
+          <div className="flex-1 h-px bg-neutral-300" />
         </div>
 
         <button
           onClick={handleGoogle}
-          className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 py-2.5 font-medium hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+          className="w-full rounded-lg border border-neutral-300 py-2.5 font-medium hover:bg-neutral-100 transition"
         >
           Google でログイン
         </button>
 
         {message && (
-          <p className="mt-4 text-sm text-green-600 dark:text-green-400">{message}</p>
+          <p className="mt-4 text-sm text-green-600">{message}</p>
         )}
         {error && (
-          <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="mt-4 text-sm text-red-600">{error}</p>
         )}
       </div>
     </main>

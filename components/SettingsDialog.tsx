@@ -155,14 +155,14 @@ export default function SettingsDialog({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold">設定</h3>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100"
           >
             <IconClose />
           </button>
@@ -175,7 +175,7 @@ export default function SettingsDialog({
           </div>
 
           {/* パスワード変更（現在のパスワードで本人確認する方式） */}
-          <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+          <div className="rounded-lg border border-neutral-200 p-3">
             <button
               onClick={() => {
                 setPwOpen((v) => !v);
@@ -189,7 +189,7 @@ export default function SettingsDialog({
             </button>
 
             {pwDone && !pwOpen && (
-              <p className="mt-2 text-xs text-green-600 dark:text-green-400">
+              <p className="mt-2 text-xs text-green-600">
                 パスワードを変更しました。
               </p>
             )}
@@ -212,7 +212,7 @@ export default function SettingsDialog({
                   required
                   autoComplete="current-password"
                   placeholder="現在のパスワード"
-                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-900"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400"
                 />
                 <input
                   type="password"
@@ -221,7 +221,7 @@ export default function SettingsDialog({
                   minLength={10}
                   autoComplete="new-password"
                   placeholder="新しいパスワード（10文字以上）"
-                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-900"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400"
                 />
                 <input
                   type="password"
@@ -230,13 +230,13 @@ export default function SettingsDialog({
                   minLength={10}
                   autoComplete="new-password"
                   placeholder="新しいパスワード（確認）"
-                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-900"
+                  className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-brand-400"
                 />
                 <p className="text-xs text-neutral-400">
                   10文字以上。英小文字・英大文字・数字・記号のうち3種類以上。
                 </p>
                 {pwError && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{pwError}</p>
+                  <p className="text-xs text-red-600">{pwError}</p>
                 )}
                 <button
                   type="submit"
@@ -249,9 +249,9 @@ export default function SettingsDialog({
             )}
           </div>
 
-          <div className="rounded-lg bg-neutral-100 p-3 dark:bg-neutral-800">
+          <div className="rounded-lg bg-neutral-100 p-3">
             <div className="mb-1 font-medium">自動削除ルール</div>
-            <ul className="list-inside list-disc space-y-0.5 text-neutral-600 dark:text-neutral-300">
+            <ul className="list-inside list-disc space-y-0.5 text-neutral-600">
               <li>短期メモは作成から {SHORT_NOTE_DAYS} 日でゴミ箱へ移動</li>
               <li>ゴミ箱のメモは {TRASH_RETENTION_DAYS} 日で完全削除</li>
             </ul>
@@ -262,7 +262,7 @@ export default function SettingsDialog({
 
           <button
             onClick={signOut}
-            className="w-full rounded-lg border border-red-200 py-2.5 font-medium text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:hover:bg-red-500/10"
+            className="w-full rounded-lg border border-red-200 py-2.5 font-medium text-red-600 hover:bg-red-50"
           >
             ログアウト
           </button>
@@ -277,7 +277,7 @@ export default function SettingsDialog({
 
           {/* 端末情報（起動画面の不一致を調べるための一時的な表示） */}
           {deviceInfo && (
-            <div className="rounded-lg bg-neutral-100 p-2 font-mono text-[10px] leading-relaxed text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+            <div className="rounded-lg bg-neutral-100 p-2 font-mono text-[10px] leading-relaxed text-neutral-500">
               <div>screen: {deviceInfo.screen} @{deviceInfo.dpr}x</div>
               <div>viewport: {deviceInfo.viewport}</div>
               <div>orientation: {deviceInfo.orientation}</div>

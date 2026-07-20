@@ -79,8 +79,8 @@ function MenuItem({
       disabled={disabled}
       className={`flex w-full items-center gap-3 whitespace-nowrap px-4 py-2.5 text-left text-sm disabled:opacity-50 ${
         danger
-          ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
-          : "hover:bg-brand-100/70 dark:hover:bg-neutral-800/70"
+          ? "text-red-600 hover:bg-red-50"
+          : "hover:bg-brand-100/70"
       }`}
     >
       {icon}
@@ -494,7 +494,7 @@ export default function NoteEditor({
   }
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-neutral-950">
+    <div className="flex h-full flex-col bg-white">
       {/* ヘッダー（書式パネルを浮かせるため relative／狭い幅では折り返して
           3点ボタンが見切れないように flex-wrap）。
           上のセーフエリア分を足しつつ、上下の余白を対称（下も 0.5rem）にして
@@ -502,11 +502,11 @@ export default function NoteEditor({
           py-2 の上パディングを打ち消し、上0・下0.5rem の非対称になっていた。 */}
       <div
         style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top))" }}
-        className="relative flex flex-wrap items-center gap-1 border-b border-brand-200/60 px-2 pb-2 dark:border-neutral-800"
+        className="relative flex flex-wrap items-center gap-1 border-b border-brand-200/60 px-2 pb-2"
       >
         <button
           onClick={onBack}
-          className={`flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
+          className={`flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100 ${
             standalone ? "" : "md:hidden"
           }`}
           title={standalone ? "閉じる" : "戻る"}
@@ -518,7 +518,7 @@ export default function NoteEditor({
         {!trashed && onToggleFullscreen && (
           <button
             onClick={onToggleFullscreen}
-            className="hidden rounded-full p-2 text-neutral-500 hover:bg-brand-100 md:block dark:hover:bg-neutral-800"
+            className="hidden rounded-full p-2 text-neutral-500 hover:bg-brand-100 md:block"
             title={isFullscreen ? "全画面を解除" : "全画面表示"}
           >
             {isFullscreen ? <IconCompress /> : <IconExpand />}
@@ -528,7 +528,7 @@ export default function NoteEditor({
         {!trashed && (
           <button
             onClick={() => shareNote(note.title, note.body)}
-            className="flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+            className="flow-press rounded-full p-2 text-neutral-500 hover:bg-brand-100"
             title="共有"
           >
             <IconShare />
@@ -537,7 +537,7 @@ export default function NoteEditor({
         {/* 短期メモのバッジ。共有ボタンの右に全角空白1つ分あけて表示。
             3分割（md）では出さず、全画面・モバイルでのみ表示する。 */}
         {!trashed && badgeVisible && (
-          <span className="flow-badge-in ml-[1em] rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+          <span className="flow-badge-in ml-[1em] rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
             短期・あと{shortDays}日
           </span>
         )}
@@ -551,8 +551,8 @@ export default function NoteEditor({
               onClick={format.toggle}
               className={`flow-press rounded-full px-3 py-1.5 text-sm font-semibold transition ${
                 format.open
-                  ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
-                  : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+                  ? "bg-brand-100 text-brand-700"
+                  : "text-neutral-500 hover:bg-brand-100"
               }`}
               title="書式"
               aria-pressed={format.open}
@@ -567,8 +567,8 @@ export default function NoteEditor({
                 onClick={insertMenu.toggle}
                 className={`flow-press rounded-full p-2 transition ${
                   insertMenu.open
-                    ? "bg-brand-100 text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
-                    : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+                    ? "bg-brand-100 text-brand-700"
+                    : "text-neutral-500 hover:bg-brand-100"
                 }`}
                 title="挿入"
                 aria-haspopup="menu"
@@ -585,7 +585,7 @@ export default function NoteEditor({
                     role="menu"
                     className={`${
                       insertMenu.closing ? "flow-format-out" : "flow-format-in"
-                    } absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
+                    } absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg`}
                   >
                     <MenuItem
                       icon={<IconImage className="h-4 w-4 text-neutral-500" />}
@@ -633,9 +633,9 @@ export default function NoteEditor({
             <div className="relative">
               <button
                 onClick={menu.toggle}
-                className={`flow-press rounded-full p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
+                className={`flow-press rounded-full p-2 hover:bg-brand-100 ${
                   menu.open
-                    ? "bg-brand-100 text-brand-700 dark:bg-neutral-800"
+                    ? "bg-brand-100 text-brand-700"
                     : "text-neutral-500"
                 }`}
                 title="その他"
@@ -653,7 +653,7 @@ export default function NoteEditor({
                     role="menu"
                     className={`${
                       menu.closing ? "flow-format-out" : "flow-format-in"
-                    } absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
+                    } absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-brand-200/60 bg-brand-50 py-1 shadow-lg`}
                   >
                     <MenuItem
                       icon={
@@ -708,7 +708,7 @@ export default function NoteEditor({
                         void downloadAsImage();
                       }}
                     />
-                    <div className="my-1 border-t border-brand-200/60 dark:border-neutral-800" />
+                    <div className="my-1 border-t border-brand-200/60" />
                     <MenuItem
                       icon={<IconTrash className="h-4 w-4" />}
                       label="削除"
@@ -731,7 +731,7 @@ export default function NoteEditor({
           <div
             className={`${
               format.closing ? "flow-format-out" : "flow-format-in"
-            } absolute right-2 top-full z-30 mt-1 max-w-[calc(100%-1rem)] rounded-2xl border border-brand-200/60 bg-brand-50 px-2 py-1.5 shadow-lg dark:border-neutral-800 dark:bg-neutral-800`}
+            } absolute right-2 top-full z-30 mt-1 max-w-[calc(100%-1rem)] rounded-2xl border border-brand-200/60 bg-brand-50 px-2 py-1.5 shadow-lg`}
           >
             <RichTextToolbar editor={editor} />
           </div>
@@ -751,8 +751,8 @@ export default function NoteEditor({
 
       {/* 短期/長期トグル or ゴミ箱バナー */}
       {trashed ? (
-        <div className="flex flex-wrap items-center gap-3 border-b border-brand-200/60 bg-red-50 px-4 py-2 text-sm dark:border-neutral-800 dark:bg-red-500/10">
-          <span className="text-red-700 dark:text-red-300">
+        <div className="flex flex-wrap items-center gap-3 border-b border-brand-200/60 bg-red-50 px-4 py-2 text-sm">
+          <span className="text-red-700">
             ゴミ箱にあります
             {(() => {
               const d = trashRemainingDays(note.trashed_at);
@@ -765,7 +765,7 @@ export default function NoteEditor({
               restoreNote(note.id);
               onBack();
             }}
-            className="flex items-center gap-1 rounded-lg bg-brand-200 px-3 py-1.5 text-sm font-medium hover:bg-brand-300 dark:bg-neutral-700 dark:hover:bg-neutral-600"
+            className="flex items-center gap-1 rounded-lg bg-brand-200 px-3 py-1.5 text-sm font-medium hover:bg-brand-300"
           >
             <IconRestore className="h-4 w-4" /> 復元
           </button>
@@ -780,11 +780,11 @@ export default function NoteEditor({
 
       {/* タグ */}
       {!trashed && (
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-brand-200/60 px-4 py-2 dark:border-neutral-800">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-brand-200/60 px-4 py-2">
           {tags.map((t) => (
             <span
               key={t}
-              className="flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-neutral-800 dark:text-neutral-200"
+              className="flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-medium text-brand-700"
             >
               #{t}
               <button
@@ -820,7 +820,7 @@ export default function NoteEditor({
         readOnly={trashed}
         onChange={(e) => updateNote(note.id, { title: e.target.value })}
         placeholder="タイトル"
-        className="bg-transparent px-4 pt-4 text-2xl font-semibold tracking-tight outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-600"
+        className="bg-transparent px-4 pt-4 text-2xl font-semibold tracking-tight outline-none placeholder:text-neutral-300"
       />
 
       {/* 本文（リッチテキスト） */}
@@ -828,7 +828,7 @@ export default function NoteEditor({
 
       {/* 添付ファイル */}
       {attachments.length > 0 && (
-        <div className="thin-scroll flex flex-wrap gap-2 border-t border-brand-200/60 px-4 py-3 dark:border-neutral-800">
+        <div className="thin-scroll flex flex-wrap gap-2 border-t border-brand-200/60 px-4 py-3">
           {attachments.map((a) => (
             <AttachmentItem
               key={a.id}
@@ -866,7 +866,7 @@ function AttachmentItem({
 
   if (a.type === "image") {
     return (
-      <div className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-brand-100 dark:bg-neutral-800">
+      <div className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-brand-100">
         {url ? (
           <a href={url} target="_blank" rel="noopener noreferrer">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -893,7 +893,7 @@ function AttachmentItem({
   }
 
   return (
-    <div className="flex max-w-[12rem] items-center gap-2 rounded-lg bg-brand-100 py-1.5 pl-3 pr-2 text-sm dark:bg-neutral-800">
+    <div className="flex max-w-[12rem] items-center gap-2 rounded-lg bg-brand-100 py-1.5 pl-3 pr-2 text-sm">
       <a
         href={url || undefined}
         target="_blank"

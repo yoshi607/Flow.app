@@ -3,7 +3,9 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light dark;
+  /* ライト固定。dark を含めると、OS がダークのときにスクロールバーや
+     フォーム部品などのブラウザ標準UIだけが暗くなってしまう。 */
+  color-scheme: light;
   /* Apple 風のシステムフォント */
   --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Segoe UI",
@@ -22,12 +24,6 @@ body {
   @apply bg-brand-50 text-neutral-900 antialiased;
   font-family: var(--font-system);
   letter-spacing: -0.01em;
-}
-
-@media (prefers-color-scheme: dark) {
-  body {
-    @apply bg-neutral-950 text-neutral-100;
-  }
 }
 
 /* テキストエリアや一覧のスクロールを滑らかに */
@@ -56,7 +52,7 @@ body {
   height: 8px;
 }
 .thin-scroll::-webkit-scrollbar-thumb {
-  @apply bg-neutral-300 dark:bg-neutral-700 rounded-full;
+  @apply bg-neutral-300 rounded-full;
 }
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
@@ -93,17 +89,9 @@ body {
 .ProseMirror hr.ProseMirror-selectednode {
   border-top-color: rgb(0 0 0 / 0.38);
 }
-@media (prefers-color-scheme: dark) {
-  .ProseMirror hr {
-    border-top-color: rgb(255 255 255 / 0.16);
-  }
-  .ProseMirror hr.ProseMirror-selectednode {
-    border-top-color: rgb(255 255 255 / 0.42);
-  }
-}
 /* ===== 音声メモのコールアウト（文字起こしブロック） ===== */
 .ProseMirror div[data-type="transcript"] {
-  @apply my-3 rounded-md border border-brand-200 bg-brand-50 px-3 py-3 dark:border-neutral-700 dark:bg-neutral-900;
+  @apply my-3 rounded-md border border-brand-200 bg-brand-50 px-3 py-3;
 }
 .ProseMirror div[data-type="transcript"] > p:last-child {
   margin-bottom: 0;
@@ -111,16 +99,16 @@ body {
 /* 録音中は枠と背景を赤にして「収録中」だと分かるようにする
    （経過時間と停止ボタンは画面下部の録音バー側に出る） */
 .ProseMirror div[data-type="transcript"][data-recording="true"] {
-  @apply border-red-300 bg-red-50 dark:border-red-500/40 dark:bg-red-500/10;
+  @apply border-red-300 bg-red-50;
 }
 
 /* ===== 本文中の手書きブロック ===== */
 .ProseMirror div[data-type="sketch"] {
-  @apply my-3 overflow-hidden rounded-md border border-brand-200 bg-white dark:border-neutral-700 dark:bg-neutral-900;
+  @apply my-3 overflow-hidden rounded-md border border-brand-200 bg-white;
 }
 /* 描画中は文字入力が止まっているので、それが分かるようにする */
 .ProseMirror div[data-type="sketch"][data-drawing="true"] {
-  @apply border-brand-400 ring-2 ring-brand-400/40 dark:border-brand-500;
+  @apply border-brand-400 ring-2 ring-brand-400/40;
 }
 /* 中身を持たないノードなので、プレースホルダーの疑似要素が漏れないようにする */
 .ProseMirror div[data-type="sketch"]::before,
@@ -149,7 +137,7 @@ body {
   float: left;
   height: 0;
   pointer-events: none;
-  @apply text-neutral-300 dark:text-neutral-600;
+  @apply text-neutral-300;
 }
 
 /* ============================================================
@@ -193,12 +181,6 @@ body {
   /* 押下時：待たせない */
   transition-duration: 0s;
 }
-@media (prefers-color-scheme: dark) {
-  .flow-press::after {
-    background-color: rgb(255 255 255 / 0.1);
-  }
-}
-
 /* ===== 2. ＋ボタン =====
    一度だけ外側へ広がるリング。粒子を飛ばす派手な演出はしない。 */
 @keyframes flow-burst-ring {

@@ -111,7 +111,7 @@ export default function SwipeRow({
   disabled = false,
   className = "",
   compact = false,
-  contentClassName = "bg-white dark:bg-neutral-950",
+  contentClassName = "bg-white",
   leadingAction,
 }: {
   actions: SwipeAction[];

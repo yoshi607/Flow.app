@@ -176,7 +176,7 @@ export default function FolderList({
             actions={actionsFor(f)}
             disabled={dragId === f.id}
             compact
-            contentClassName="rounded-2xl bg-brand-50 dark:bg-neutral-900"
+            contentClassName="rounded-2xl bg-brand-50"
           >
             <div className="group relative">
               <button
@@ -203,7 +203,7 @@ export default function FolderList({
                   出る。PC・タッチ共通。タッチはこれに加えて左スワイプの「削除」も可。 */}
               <button
                 onClick={() => confirmDelete(f)}
-                className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded p-1 text-neutral-400 hover:bg-brand-200 hover:text-red-600 group-hover:block dark:hover:bg-neutral-700"
+                className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded p-1 text-neutral-400 hover:bg-brand-200 hover:text-red-600 group-hover:block"
                 title="フォルダを削除"
               >
                 <IconTrash className="h-3.5 w-3.5" />

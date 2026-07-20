@@ -59,7 +59,7 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
           disabled={!canUndo}
           title="1つ戻す (Ctrl/Cmd+Z)"
           aria-label="1つ戻す"
-          className="rounded-lg p-1.5 text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30 dark:hover:bg-neutral-800"
+          className="rounded-lg p-1.5 text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30"
         >
           <IconUndo className="h-4 w-4" />
         </button>
@@ -70,14 +70,14 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
           disabled={!canRedo}
           title="1つ送る (Ctrl/Cmd+Shift+Z)"
           aria-label="1つ送る"
-          className="rounded-lg p-1.5 text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30 dark:hover:bg-neutral-800"
+          className="rounded-lg p-1.5 text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30"
         >
           <IconRedo className="h-4 w-4" />
         </button>
       </div>
 
       {/* 見出し / テキスト */}
-      <div className="flex items-center gap-0.5 rounded-lg bg-brand-100 p-0.5 dark:bg-neutral-800">
+      <div className="flex items-center gap-0.5 rounded-lg bg-brand-100 p-0.5">
         {HEADINGS.map(({ level, icon: Icon, title }) => (
           <button
             key={level}
@@ -87,7 +87,7 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
             title={title}
             className={`rounded-md p-1.5 transition ${
               isHeadingActive(level)
-                ? "bg-white shadow-sm dark:bg-neutral-950"
+                ? "bg-white shadow-sm"
                 : "text-neutral-500"
             }`}
           >
@@ -105,8 +105,8 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
           title="太字 (Ctrl/Cmd+B)"
           className={`rounded-lg p-1.5 transition ${
             editor.isActive("bold")
-              ? "bg-brand-200 text-brand-700 dark:bg-neutral-700 dark:text-neutral-100"
-              : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+              ? "bg-brand-200 text-brand-700"
+              : "text-neutral-500 hover:bg-brand-100"
           }`}
         >
           <IconBold className="h-4 w-4" />
@@ -118,8 +118,8 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
           title="斜体 (Ctrl/Cmd+I)"
           className={`rounded-lg p-1.5 transition ${
             editor.isActive("italic")
-              ? "bg-brand-200 text-brand-700 dark:bg-neutral-700 dark:text-neutral-100"
-              : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+              ? "bg-brand-200 text-brand-700"
+              : "text-neutral-500 hover:bg-brand-100"
           }`}
         >
           <IconItalic className="h-4 w-4" />
@@ -131,8 +131,8 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
           title="下線 (Ctrl/Cmd+U)"
           className={`rounded-lg p-1.5 transition ${
             editor.isActive("underline")
-              ? "bg-brand-200 text-brand-700 dark:bg-neutral-700 dark:text-neutral-100"
-              : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+              ? "bg-brand-200 text-brand-700"
+              : "text-neutral-500 hover:bg-brand-100"
           }`}
         >
           <IconUnderline className="h-4 w-4" />
@@ -148,20 +148,20 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
           title="文字色"
           className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
             colorOpen
-              ? "bg-brand-200 dark:bg-neutral-700"
-              : "hover:bg-brand-100 dark:hover:bg-neutral-800"
+              ? "bg-brand-200"
+              : "hover:bg-brand-100"
           }`}
         >
           {/* 現在色の丸（未設定時はグレー枠） */}
           <span
-            className="h-5 w-5 rounded-full border-2 border-black/30 dark:border-white/40"
+            className="h-5 w-5 rounded-full border-2 border-black/30"
             style={{ backgroundColor: currentColor ?? "transparent" }}
           />
         </button>
         {colorOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setColorOpen(false)} />
-            <div className="flow-menu-in absolute right-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
+            <div className="flow-menu-in absolute right-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl">
               {COLORS.map((c) => {
                 const active = editor.isActive("textStyle", { color: c.hex });
                 return (
@@ -174,7 +174,7 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
                       setColorOpen(false);
                     }}
                     title={c.name}
-                    className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 transition dark:ring-offset-neutral-900 ${
+                    className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 transition ${
                       active ? "ring-2 ring-neutral-400" : ""
                     }`}
                     style={{ backgroundColor: c.hex }}
@@ -190,7 +190,7 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
                   setColorOpen(false);
                 }}
                 title="標準色"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-neutral-300 text-[10px] text-neutral-500 dark:border-neutral-600"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-neutral-300 text-[10px] text-neutral-500"
               >
                 A
               </button>

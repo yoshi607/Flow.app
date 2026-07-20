@@ -30,7 +30,7 @@ function Countdown({ note }: { note: Note }) {
     const d = trashRemainingDays(note.trashed_at);
     if (d === null) return null;
     return (
-      <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
+      <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
         完全削除まであと{d}日
       </span>
     );
@@ -39,7 +39,7 @@ function Countdown({ note }: { note: Note }) {
     const d = shortNoteRemainingDays(note.expires_at);
     if (d === null) return null;
     return (
-      <span className="rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+      <span className="rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
         あと{d}日で自動削除
       </span>
     );
@@ -65,14 +65,14 @@ function CreateButton({ onCreate }: { onCreate: (origin: DOMRect) => void }) {
   return (
     <button
       onClick={handleClick}
-      className="flow-press rounded-full bg-brand-200 p-2 text-brand-700 shadow-sm hover:bg-brand-300 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+      className="flow-press rounded-full bg-brand-200 p-2 text-brand-700 shadow-sm hover:bg-brand-300"
       title="新規メモ"
     >
       <IconPlus />
       {rings.map((id) => (
         <span
           key={id}
-          className="flow-burst-ring pointer-events-none absolute inset-0 rounded-full border border-brand-400 dark:border-brand-500"
+          className="flow-burst-ring pointer-events-none absolute inset-0 rounded-full border border-brand-400"
           aria-hidden
         />
       ))}
@@ -189,7 +189,7 @@ export default function NoteList({
             : "すべてのメモ";
 
   return (
-    <div className="flex h-full flex-col bg-white/70 backdrop-blur-xl dark:bg-neutral-950">
+    <div className="flex h-full flex-col bg-white/70 backdrop-blur-xl">
       {/* ヘッダー（☰・タイトル・＋を少しだけ下げて視覚的に揃える。transform なので
           下の検索欄などのレイアウトには影響しない） */}
       <div className="safe-top flex translate-y-[5px] items-center gap-2 px-3 pt-3">
@@ -197,7 +197,7 @@ export default function NoteList({
         <button
           onClick={onOpenMenu}
           title="フォルダを表示"
-          className={`flow-press rounded-lg p-2 hover:bg-brand-100 dark:hover:bg-neutral-800 ${
+          className={`flow-press rounded-lg p-2 hover:bg-brand-100 ${
             sidebarCollapsed ? "" : "md:hidden"
           }`}
         >
@@ -213,7 +213,7 @@ export default function NoteList({
                 if (window.confirm("ゴミ箱を空にしますか？（元に戻せません）"))
                   emptyTrash();
               }}
-              className="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+              className="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50"
             >
               空にする
             </button>
@@ -225,7 +225,7 @@ export default function NoteList({
 
       {/* 検索 */}
       <div className="px-3 py-2">
-        <div className="flex items-center gap-2 rounded-xl bg-brand-100/80 px-3 py-2 dark:bg-neutral-800">
+        <div className="flex items-center gap-2 rounded-xl bg-brand-100/80 px-3 py-2">
           <IconSearch className="h-4 w-4 text-neutral-400" />
           <input
             value={query}
@@ -266,8 +266,8 @@ export default function NoteList({
               onClick={() => onSelect(note.id)}
               className={`flow-press block w-full rounded-2xl px-3 py-2.5 text-left ${
                 selectedId === note.id
-                  ? "bg-brand-100 dark:bg-brand-500/20"
-                  : "hover:bg-brand-100/60 dark:hover:bg-neutral-800/60"
+                  ? "bg-brand-100"
+                  : "hover:bg-brand-100/60"
               }`}
             >
               <div className="flex items-center gap-1.5">
@@ -284,14 +284,14 @@ export default function NoteList({
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {note.type === "short" && note.status === "active" && (
-                  <span className="rounded-md bg-brand-200 px-1.5 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-neutral-700 dark:text-neutral-300">
+                  <span className="rounded-md bg-brand-200 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
                     短期
                   </span>
                 )}
                 {(note.tags ?? []).slice(0, 3).map((t) => (
                   <span
                     key={t}
-                    className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[10px] font-medium text-brand-600 dark:bg-neutral-800 dark:text-neutral-300"
+                    className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[10px] font-medium text-brand-600"
                   >
                     #{t}
                   </span>

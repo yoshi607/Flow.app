@@ -31,7 +31,7 @@ function Popover({
       <div
         data-sketch-ui
         style={{ transformOrigin: "top left" }}
-        className="flow-menu-in absolute left-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
+        className="flow-menu-in absolute left-0 top-full z-50 mt-1 flex items-center gap-2 rounded-xl border border-brand-200/60 bg-white p-2 shadow-xl"
       >
         {children}
       </div>
@@ -383,7 +383,7 @@ export default function SketchNodeView({
           <button
             type="button"
             onClick={enterDraw}
-            className="flow-press rounded-lg bg-brand-100 px-4 py-1.5 text-sm font-medium text-brand-700 dark:bg-neutral-800 dark:text-neutral-100"
+            className="flow-press rounded-lg bg-brand-100 px-4 py-1.5 text-sm font-medium text-brand-700"
             title="ペンで書き込みます（この間は文字入力を止めます）"
           >
             描く
@@ -395,7 +395,7 @@ export default function SketchNodeView({
           <button
             type="button"
             onClick={confirmDelete}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+            className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600"
             title="この手書きを削除"
             aria-label="この手書きを削除"
           >
@@ -430,12 +430,12 @@ export default function SketchNodeView({
               title="ペンの色"
               className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                 openMenu === "color"
-                  ? "bg-brand-200 dark:bg-neutral-700"
-                  : "hover:bg-brand-100 dark:hover:bg-neutral-800"
+                  ? "bg-brand-200"
+                  : "hover:bg-brand-100"
               }`}
             >
               <span
-                className="h-5 w-5 rounded-full border-2 border-black/30 dark:border-white/40"
+                className="h-5 w-5 rounded-full border-2 border-black/30"
                 style={{ backgroundColor: color }}
               />
             </button>
@@ -451,7 +451,7 @@ export default function SketchNodeView({
                       closeMenu();
                     }}
                     title="ペンの色"
-                    className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 transition dark:ring-offset-neutral-900 ${
+                    className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 transition ${
                       color === c ? "ring-2 ring-neutral-400" : ""
                     }`}
                     style={{ backgroundColor: c }}
@@ -469,12 +469,12 @@ export default function SketchNodeView({
               title="線の太さ"
               className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                 openMenu === "width"
-                  ? "bg-brand-200 dark:bg-neutral-700"
-                  : "hover:bg-brand-100 dark:hover:bg-neutral-800"
+                  ? "bg-brand-200"
+                  : "hover:bg-brand-100"
               }`}
             >
               <span
-                className="rounded-full bg-current text-neutral-600 dark:text-neutral-300"
+                className="rounded-full bg-current text-neutral-600"
                 style={{ width: width + 3, height: width + 3 }}
               />
             </button>
@@ -492,12 +492,12 @@ export default function SketchNodeView({
                     title={`太さ ${w}`}
                     className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
                       width === w
-                        ? "bg-brand-200 dark:bg-neutral-700"
-                        : "hover:bg-brand-100 dark:hover:bg-neutral-800"
+                        ? "bg-brand-200"
+                        : "hover:bg-brand-100"
                     }`}
                   >
                     <span
-                      className="rounded-full bg-current text-neutral-600 dark:text-neutral-300"
+                      className="rounded-full bg-current text-neutral-600"
                       style={{ width: w + 3, height: w + 3 }}
                     />
                   </button>
@@ -517,8 +517,8 @@ export default function SketchNodeView({
             aria-label="消しゴム"
             className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
               erasing
-                ? "bg-brand-200 text-brand-700 dark:bg-neutral-700 dark:text-neutral-100"
-                : "text-neutral-500 hover:bg-brand-100 dark:hover:bg-neutral-800"
+                ? "bg-brand-200 text-brand-700"
+                : "text-neutral-500 hover:bg-brand-100"
             }`}
           >
             <IconEraser className="h-5 w-5" />
@@ -531,7 +531,7 @@ export default function SketchNodeView({
             disabled={!hist.canUndo}
             title="1つ戻す"
             aria-label="1つ戻す"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30 dark:hover:bg-neutral-800"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30"
           >
             <IconUndo className="h-5 w-5" />
           </button>
@@ -541,7 +541,7 @@ export default function SketchNodeView({
             disabled={!hist.canRedo}
             title="1つ送る"
             aria-label="1つ送る"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30 dark:hover:bg-neutral-800"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-brand-100 disabled:opacity-30"
           >
             <IconRedo className="h-5 w-5" />
           </button>
@@ -550,7 +550,7 @@ export default function SketchNodeView({
           <button
             type="button"
             onClick={confirmDelete}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+            className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600"
             title="この手書きを削除"
             aria-label="この手書きを削除"
           >

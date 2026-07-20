@@ -12,12 +12,8 @@ export const metadata: Metadata = {
     title: "Flow",
   },
   icons: {
-    // ブラウザタブのアイコンは OS のライト/ダーク設定に応じて切り替わる
-    icon: [
-      { url: "/icons/favicon-light-48.png", media: "(prefers-color-scheme: light)" },
-      { url: "/icons/favicon-dark-48.png", media: "(prefers-color-scheme: dark)" },
-    ],
-    // ホーム画面アイコンは端末側が動的切替に対応していないため既定（ライト）を使用
+    // ライト固定（アプリ自体がライトのみのため、OS 設定では切り替えない）
+    icon: "/icons/favicon-light-48.png",
     apple: "/icons/apple-touch-icon.png",
   },
 };

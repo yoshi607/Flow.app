@@ -201,12 +201,12 @@ export default function VoiceRecorder({
 
   if (phase === "error") {
     return (
-      <div className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-red-200 bg-red-50 px-4 py-3 dark:border-red-500/30 dark:bg-red-950">
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-red-200 bg-red-50 px-4 py-3">
         <div className="mx-auto flex max-w-2xl items-center gap-3">
-          <p className="flex-1 text-sm text-red-700 dark:text-red-300">{error}</p>
+          <p className="flex-1 text-sm text-red-700">{error}</p>
           <button
             onClick={cancel}
-            className="rounded-lg bg-neutral-200 px-3 py-1.5 text-sm dark:bg-neutral-700"
+            className="rounded-lg bg-neutral-200 px-3 py-1.5 text-sm"
           >
             閉じる
           </button>
@@ -216,7 +216,7 @@ export default function VoiceRecorder({
   }
 
   return (
-    <div className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-brand-200/60 bg-white/95 px-4 py-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95">
+    <div className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-brand-200/60 bg-white/95 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-2xl items-center gap-3">
         {phase === "recording" ? (
           <>
@@ -227,14 +227,14 @@ export default function VoiceRecorder({
             </span>
             <button
               onClick={stop}
-              className="flow-press rounded-full bg-neutral-900 px-5 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
+              className="flow-press rounded-full bg-neutral-900 px-5 py-2 text-sm font-medium text-white"
             >
               停止
             </button>
             <button
               onClick={cancel}
               title="取り消し"
-              className="flow-press rounded-lg p-2 text-neutral-400 hover:bg-brand-100 dark:hover:bg-neutral-800"
+              className="flow-press rounded-lg p-2 text-neutral-400 hover:bg-brand-100"
             >
               <IconClose className="h-4 w-4" />
             </button>
@@ -249,7 +249,7 @@ export default function VoiceRecorder({
         )}
       </div>
       {error && phase === "recording" && (
-        <p className="mx-auto mt-1 max-w-2xl truncate text-xs text-red-600 dark:text-red-400">
+        <p className="mx-auto mt-1 max-w-2xl truncate text-xs text-red-600">
           {error}
         </p>
       )}

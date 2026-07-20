@@ -65,20 +65,20 @@ export default function Sidebar({
   const rowClass = (active: boolean) =>
     `flex items-center gap-2.5 w-full px-3 py-2 rounded-2xl text-sm text-left transition ${
       active
-        ? "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200"
-        : "hover:bg-brand-100/70 dark:hover:bg-neutral-800/60"
+        ? "bg-brand-100 text-brand-700"
+        : "hover:bg-brand-100/70"
     }`;
 
   // タグのチップ（ピル）表示
   const chipClass = (active: boolean) =>
     `rounded-2xl px-3.5 py-2 text-sm font-medium transition ${
       active
-        ? "bg-brand-200 text-brand-700 dark:bg-brand-500/25 dark:text-brand-100"
-        : "bg-brand-100 text-neutral-600 hover:bg-brand-200/70 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+        ? "bg-brand-200 text-brand-700"
+        : "bg-brand-100 text-neutral-600 hover:bg-brand-200/70"
     }`;
 
   return (
-    <div className="flex h-full flex-col bg-brand-50/80 backdrop-blur-xl dark:bg-neutral-900 safe-top border-r border-brand-200/60 dark:border-neutral-800">
+    <div className="flex h-full flex-col bg-brand-50/80 backdrop-blur-xl safe-top border-r border-brand-200/60">
       <div className="flex items-center gap-1 px-4 py-4">
         <h1 className="flex-1 text-xl font-semibold tracking-tight">Flow</h1>
         {/* フォルダ一覧を最小化（md以上のみ。モバイルはドロワーなので不要） */}
@@ -87,7 +87,7 @@ export default function Sidebar({
             onClick={onCollapse}
             title="フォルダ一覧を最小化"
             aria-label="フォルダ一覧を最小化"
-            className="flow-press hidden rounded-lg p-1.5 text-neutral-400 hover:bg-brand-100 hover:text-neutral-700 md:block dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+            className="flow-press hidden rounded-lg p-1.5 text-neutral-400 hover:bg-brand-100 hover:text-neutral-700 md:block"
           >
             <IconCollapse className="h-5 w-5" />
           </button>
@@ -125,7 +125,7 @@ export default function Sidebar({
                   setFoldersOpen(true);
                   setAdding(true);
                 }}
-                className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                className="text-neutral-400 hover:text-neutral-700"
                 title="フォルダを追加"
               >
                 <IconPlus className="h-4 w-4" />
@@ -133,7 +133,7 @@ export default function Sidebar({
             </div>
             <button
               onClick={() => setFoldersOpen((v) => !v)}
-              className="text-neutral-400 transition hover:text-neutral-600 dark:hover:text-neutral-200"
+              className="text-neutral-400 transition hover:text-neutral-600"
               title={foldersOpen ? "フォルダを閉じる" : "フォルダを開く"}
             >
               <IconChevron
@@ -166,7 +166,7 @@ export default function Sidebar({
                     }
                   }}
                   placeholder="フォルダ名"
-                  className="mx-1 mt-1 w-[calc(100%-0.5rem)] rounded-xl border border-brand-300 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-800"
+                  className="mx-1 mt-1 w-[calc(100%-0.5rem)] rounded-xl border border-brand-300 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-400"
                 />
               )}
               {/* ゴミ箱はフォルダ一覧の一番下に、少し間をあけて置く。UI 上の並び
@@ -191,7 +191,7 @@ export default function Sidebar({
         <div className="pt-3">
           <button
             onClick={() => setTagsOpen((v) => !v)}
-            className="flex w-full items-center justify-between px-3 pb-1 text-neutral-400 transition hover:text-neutral-600 dark:hover:text-neutral-200"
+            className="flex w-full items-center justify-between px-3 pb-1 text-neutral-400 transition hover:text-neutral-600"
           >
             <span className="text-xs font-medium uppercase tracking-wide">
               タグ
@@ -224,7 +224,7 @@ export default function Sidebar({
         </div>
       </nav>
 
-      <div className="safe-bottom flex items-center gap-2 border-t border-brand-200/60 p-2 dark:border-neutral-800">
+      <div className="safe-bottom flex items-center gap-2 border-t border-brand-200/60 p-2">
         <button
           className={`${rowClass(false)} flex-1`}
           onClick={onOpenSettings}

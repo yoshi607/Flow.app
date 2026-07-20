@@ -558,8 +558,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           ? // 左右分割：外周は画面端まで（余白なし＝端の角丸は端末のiPad Pro形状に
             // 任せる）、中央のみ隙間を空けて区切り線にする（隙間は右ドックの
             // margin-left で作り、閉じるときに 0 へ縮めて左を端まで伸ばし切る）。
-            "bg-brand-200/70 dark:bg-neutral-800"
-          : "bg-brand-50 dark:bg-neutral-950"
+            "bg-brand-200/70"
+          : "bg-brand-50"
       }`}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -576,7 +576,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           !dockedNote
             ? "contents"
             : wide
-              ? "relative flex min-w-0 flex-1 overflow-hidden rounded-r-[18px] bg-brand-50 dark:bg-neutral-950"
+              ? "relative flex min-w-0 flex-1 overflow-hidden rounded-r-[18px] bg-brand-50"
               : "hidden"
         }
       >
@@ -643,7 +643,7 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       {/* メモ一覧（全画面時は非表示）
           ※iPad縦(768〜834px)でも本文が潰れないよう、一覧の幅は控えめにする */}
       <div
-        className={`w-full shrink-0 flex-col border-r border-brand-200/60 dark:border-neutral-800 md:flex md:w-72 ${
+        className={`w-full shrink-0 flex-col border-r border-brand-200/60 md:flex md:w-72 ${
           dockedNote && wide ? "lg:w-56" : "lg:w-80"
         } ${selectedId ? "hidden md:flex" : "flex"} ${
           fullscreen ? "md:hidden" : ""
@@ -755,8 +755,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           ref={dockPaneRef}
           className={
             wide
-              ? "relative flex shrink-0 overflow-hidden rounded-l-[18px] bg-white dark:bg-neutral-950"
-              : "flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950"
+              ? "relative flex shrink-0 overflow-hidden rounded-l-[18px] bg-white"
+              : "flex min-w-0 flex-1 flex-col bg-white"
           }
           style={
             wide

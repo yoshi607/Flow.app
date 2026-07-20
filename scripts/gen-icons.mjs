@@ -7,7 +7,6 @@ import path from "node:path";
 const SRC_DIR = path.join(process.cwd(), "Flow_icon");
 const OUT_DIR = path.join(process.cwd(), "public", "icons");
 const LIGHT_SRC = path.join(SRC_DIR, "Flow_light_icon.png");
-const DARK_SRC = path.join(SRC_DIR, "Flow_dark_icon.png");
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
@@ -63,17 +62,12 @@ async function writeMaskableIcon(glyph, size, outFile) {
 }
 
 const lightGlyph = await trimmedGlyph(LIGHT_SRC);
-const darkGlyph = await trimmedGlyph(DARK_SRC);
 
-// PWA / ホーム画面アイコン（各プラットフォームとも動的なライト/ダーク切替に
-// 対応していないため、既定値として指定された Flow_light_icon を使用）
+// アプリはライトのみのため、アイコンも Flow_light_icon から1種類だけ書き出す。
 await writeIcon(lightGlyph, 192, "icon-192.png");
 await writeIcon(lightGlyph, 512, "icon-512.png");
 await writeIcon(lightGlyph, 180, "apple-touch-icon.png");
 await writeMaskableIcon(lightGlyph, 512, "icon-maskable-512.png");
-
-// ブラウザタブの favicon はライト/ダーク動的切替に対応できるため両方書き出す
 await writeIcon(lightGlyph, 48, "favicon-light-48.png");
-await writeIcon(darkGlyph, 48, "favicon-dark-48.png");
 
 console.log("アイコンを public/icons/ に生成しました。");

@@ -55,7 +55,7 @@ export default function ImageBlockView({
           ) : (
             /* 署名付きURL解決中のプレースホルダ（レイアウト崩れ防止） */
             <div
-              className="max-h-56 w-40 animate-pulse rounded-lg bg-brand-100 dark:bg-neutral-800"
+              className="max-h-56 w-40 animate-pulse rounded-lg bg-brand-100"
               style={h && w ? { aspectRatio: `${w} / ${h}` } : { aspectRatio: "4 / 3" }}
             />
           )}

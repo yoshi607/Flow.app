@@ -8,7 +8,7 @@ export default function StandaloneNote({ noteId }: { noteId: string }) {
   const note = notes.find((n) => n.id === noteId) ?? null;
 
   return (
-    <div className="h-app-screen bg-white dark:bg-neutral-950">
+    <div className="h-app-screen bg-white">
       {note ? (
         <NoteEditor note={note} standalone onBack={() => window.close()} />
       ) : (
