@@ -13,10 +13,15 @@ export default async function Home() {
   if (!userId) redirect("/login");
 
   const supabase = createClient();
-  const { notes, folders } = await fetchInitialNotesData(supabase);
+  const { notes, folders, shortNoteDays } = await fetchInitialNotesData(supabase);
 
   return (
-    <NotesProvider userId={userId} initialNotes={notes} initialFolders={folders}>
+    <NotesProvider
+      userId={userId}
+      initialNotes={notes}
+      initialFolders={folders}
+      initialShortNoteDays={shortNoteDays ?? undefined}
+    >
       {/* OSのスプラッシュから続く導入アニメーション。矢印を線描きして自分で消える */}
       <SplashIntro />
       <AppShell userEmail={userEmail ?? ""} />

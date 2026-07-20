@@ -3,10 +3,18 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useNotes } from "@/lib/store";
 import { passwordIssue } from "@/lib/passwordPolicy";
-import { SHORT_NOTE_DAYS, TRASH_RETENTION_DAYS } from "@/lib/types";
+import {
+  MIN_SHORT_NOTE_DAYS,
+  MAX_SHORT_NOTE_DAYS,
+  TRASH_RETENTION_DAYS,
+} from "@/lib/types";
 import splashScreens from "@/lib/splashScreens.json";
 import { IconClose } from "./icons";
+
+// 短期メモの日数のよく使う候補（これ以外は数値入力で指定できる）
+const DAY_PRESETS = [1, 3, 7, 14, 30];
 
 export default function SettingsDialog({
   userEmail,
@@ -17,6 +25,40 @@ export default function SettingsDialog({
 }) {
   const router = useRouter();
   const supabase = createClient();
+  const { shortNoteDays, setShortNoteDays } = useNotes();
+
+  // 短期メモの日数設定。入力欄は保存済みの値に追従させる
+  // （他端末で変更された場合もここに反映される）。
+  const [daysInput, setDaysInput] = useState(String(shortNoteDays));
+  const [daysSaving, setDaysSaving] = useState(false);
+  const [daysError, setDaysError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDaysInput(String(shortNoteDays));
+  }, [shortNoteDays]);
+
+  async function saveDays(days: number) {
+    if (!Number.isFinite(days)) {
+      setDaysError("日数を数字で入力してください。");
+      return;
+    }
+    const n = Math.round(days);
+    if (n < MIN_SHORT_NOTE_DAYS || n > MAX_SHORT_NOTE_DAYS) {
+      setDaysError(
+        `${MIN_SHORT_NOTE_DAYS}〜${MAX_SHORT_NOTE_DAYS} の範囲で入力してください。`,
+      );
+      return;
+    }
+    setDaysError(null);
+    setDaysSaving(true);
+    try {
+      await setShortNoteDays(n);
+    } catch {
+      setDaysError("設定の保存に失敗しました。通信環境を確認してください。");
+    } finally {
+      setDaysSaving(false);
+    }
+  }
 
   // パスワード変更用の状態。
   // このプロジェクトは Supabase 側で「パスワード変更時に現在のパスワードを必須」
@@ -249,10 +291,72 @@ export default function SettingsDialog({
             )}
           </div>
 
+          {/* 短期メモの保存日数。ここを変えると、以降に作成・復元・短期へ
+              切り替えたメモの「あと◯日」の上限がその日数になる。 */}
+          <div className="rounded-lg border border-neutral-200 p-3">
+            <div className="font-medium">短期メモの保存日数</div>
+            <p className="mt-0.5 text-xs text-neutral-400">
+              作成からこの日数でゴミ箱へ移動します。
+            </p>
+
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {DAY_PRESETS.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  disabled={daysSaving}
+                  onClick={() => saveDays(d)}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition disabled:opacity-50 ${
+                    shortNoteDays === d
+                      ? "border-brand-500 bg-brand-500 text-white"
+                      : "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50"
+                  }`}
+                >
+                  {d}日
+                </button>
+              ))}
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveDays(Number(daysInput));
+              }}
+              className="mt-2 flex items-center gap-2"
+            >
+              <input
+                type="number"
+                inputMode="numeric"
+                min={MIN_SHORT_NOTE_DAYS}
+                max={MAX_SHORT_NOTE_DAYS}
+                step={1}
+                value={daysInput}
+                onChange={(e) => setDaysInput(e.target.value)}
+                className="w-24 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-400"
+                aria-label="短期メモの保存日数"
+              />
+              <span className="text-neutral-500">日</span>
+              <button
+                type="submit"
+                disabled={daysSaving || Number(daysInput) === shortNoteDays}
+                className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-600 disabled:opacity-50"
+              >
+                {daysSaving ? "保存中…" : "保存"}
+              </button>
+            </form>
+
+            <p className="mt-2 text-xs text-neutral-400">
+              現在の設定：{shortNoteDays} 日（{MIN_SHORT_NOTE_DAYS}〜
+              {MAX_SHORT_NOTE_DAYS} 日）。変更は、これから作成・復元する
+              短期メモから適用されます（すでにあるメモの残り日数は変わりません）。
+            </p>
+            {daysError && <p className="mt-1 text-xs text-red-600">{daysError}</p>}
+          </div>
+
           <div className="rounded-lg bg-neutral-100 p-3">
             <div className="mb-1 font-medium">自動削除ルール</div>
             <ul className="list-inside list-disc space-y-0.5 text-neutral-600">
-              <li>短期メモは作成から {SHORT_NOTE_DAYS} 日でゴミ箱へ移動</li>
+              <li>短期メモは作成から {shortNoteDays} 日でゴミ箱へ移動</li>
               <li>ゴミ箱のメモは {TRASH_RETENTION_DAYS} 日で完全削除</li>
             </ul>
             <p className="mt-2 text-xs text-neutral-400">

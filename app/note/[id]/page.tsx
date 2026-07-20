@@ -16,10 +16,15 @@ export default async function NoteWindow({
   if (!userId) redirect("/login");
 
   const supabase = createClient();
-  const { notes, folders } = await fetchInitialNotesData(supabase);
+  const { notes, folders, shortNoteDays } = await fetchInitialNotesData(supabase);
 
   return (
-    <NotesProvider userId={userId} initialNotes={notes} initialFolders={folders}>
+    <NotesProvider
+      userId={userId}
+      initialNotes={notes}
+      initialFolders={folders}
+      initialShortNoteDays={shortNoteDays ?? undefined}
+    >
       <StandaloneNote noteId={params.id} />
     </NotesProvider>
   );

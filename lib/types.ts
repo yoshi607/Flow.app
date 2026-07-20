@@ -38,7 +38,19 @@ export interface Attachment {
   created_at: string;
 }
 
-// 短期メモの有効日数（作成からこの日数でゴミ箱行き）
-export const SHORT_NOTE_DAYS = 7;
+// ユーザーごとの設定（設定画面で変更する値。アカウント単位で同期される）
+export interface UserSettings {
+  user_id: string;
+  short_note_days: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// 短期メモの有効日数（作成からこの日数でゴミ箱行き）。
+// 設定画面から変更でき、未設定のユーザーはこの既定値になる。
+export const DEFAULT_SHORT_NOTE_DAYS = 7;
+// 設定画面で選べる範囲（DB 側の check 制約と揃えること）
+export const MIN_SHORT_NOTE_DAYS = 1;
+export const MAX_SHORT_NOTE_DAYS = 365;
 // ゴミ箱の保持日数（この日数で完全削除）
 export const TRASH_RETENTION_DAYS = 30;

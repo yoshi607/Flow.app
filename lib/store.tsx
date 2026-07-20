@@ -15,7 +15,10 @@ import {
   type Note,
   type Folder,
   type NoteType,
-  SHORT_NOTE_DAYS,
+  type UserSettings,
+  DEFAULT_SHORT_NOTE_DAYS,
+  MIN_SHORT_NOTE_DAYS,
+  MAX_SHORT_NOTE_DAYS,
 } from "@/lib/types";
 
 interface NotesContextValue {
@@ -23,6 +26,9 @@ interface NotesContextValue {
   folders: Folder[];
   loading: boolean;
   userId: string;
+  // 短期メモが自動でゴミ箱へ行くまでの日数（設定画面で変更できる）
+  shortNoteDays: number;
+  setShortNoteDays: (days: number) => Promise<void>;
   createNote: (partial?: Partial<Note>) => Promise<Note | null>;
   updateNote: (
     id: string,
@@ -54,16 +60,19 @@ export function NotesProvider({
   userId,
   initialNotes = [],
   initialFolders = [],
+  initialShortNoteDays = DEFAULT_SHORT_NOTE_DAYS,
   children,
 }: {
   userId: string;
   initialNotes?: Note[];
   initialFolders?: Folder[];
+  initialShortNoteDays?: number;
   children: React.ReactNode;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [notes, setNotes] = useState<Note[]>(initialNotes);
   const [folders, setFolders] = useState<Folder[]>(initialFolders);
+  const [shortNoteDays, setShortNoteDaysState] = useState(initialShortNoteDays);
   // メモ/フォルダはサーバー側で先読み済みのため常に false
   // （NotesContextValue の互換性のため型としては残す）
   const [loading] = useState(false);
@@ -97,8 +106,11 @@ export function NotesProvider({
     if (refreshing.current) return;
     refreshing.current = true;
     try {
-      const { notes: fresh, folders: freshFolders } =
-        await fetchInitialNotesData(supabase);
+      const {
+        notes: fresh,
+        folders: freshFolders,
+        shortNoteDays: freshShortNoteDays,
+      } = await fetchInitialNotesData(supabase);
 
       setNotes((prev) => {
         const prevById = new Map(prev.map((n) => [n.id, n]));
@@ -114,6 +126,8 @@ export function NotesProvider({
         return [...localOnly, ...merged];
       });
       setFolders(freshFolders);
+      // 取得できたときだけ更新（失敗時は今の設定を保つ）
+      if (freshShortNoteDays !== null) setShortNoteDaysState(freshShortNoteDays);
     } finally {
       refreshing.current = false;
     }
@@ -192,6 +206,38 @@ export function NotesProvider({
       supabase.removeChannel(channel);
     };
   }, [supabase, userId, refresh, keepLocal]);
+
+  // 設定（user_settings）のリアルタイム購読。
+  // メモ/フォルダとは別チャンネルにしている。0007_user_settings.sql を
+  // 未適用の環境ではこの購読が失敗するが、チャンネルを分けておけば
+  // メモ側の同期は巻き込まれずに動き続ける。
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime-user-settings")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_settings",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          // 他端末で設定を変えたら即反映する（行が消えた場合は既定値へ戻す）
+          if (payload.eventType === "DELETE") {
+            setShortNoteDaysState(DEFAULT_SHORT_NOTE_DAYS);
+            return;
+          }
+          const row = payload.new as UserSettings;
+          setShortNoteDaysState(row.short_note_days ?? DEFAULT_SHORT_NOTE_DAYS);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, userId]);
 
   // ローカル状態を1件更新。touch=false のときは編集日時(updated_at)を据え置く
   // （ピン留めなど、内容の編集ではない操作向け）。
@@ -296,7 +342,7 @@ export function NotesProvider({
         type,
         status: "active" as const,
         tags: partial.tags ?? [],
-        expires_at: type === "short" ? daysFromNowISO(SHORT_NOTE_DAYS) : null,
+        expires_at: type === "short" ? daysFromNowISO(shortNoteDays) : null,
       };
       const { data, error } = await supabase
         .from("notes")
@@ -311,21 +357,21 @@ export function NotesProvider({
       setNotes((prev) => [note, ...prev]);
       return note;
     },
-    [supabase, userId],
+    [supabase, userId, shortNoteDays],
   );
 
   const setNoteType = useCallback(
     (id: string, type: NoteType) => {
       const note = notes.find((n) => n.id === id);
-      // すでに同じ type の場合は期限を延長しない（再クリックで7日が延びるのを防ぐ）
+      // すでに同じ type の場合は期限を延長しない（再クリックで期限が延びるのを防ぐ）
       if (note && note.type === type) return;
       const patch: Partial<Note> =
         type === "short"
-          ? { type, expires_at: daysFromNowISO(SHORT_NOTE_DAYS) }
+          ? { type, expires_at: daysFromNowISO(shortNoteDays) }
           : { type, expires_at: null };
       updateNote(id, patch, true);
     },
-    [notes, updateNote],
+    [notes, updateNote, shortNoteDays],
   );
 
   const togglePin = useCallback(
@@ -355,19 +401,19 @@ export function NotesProvider({
   const restoreNote = useCallback(
     (id: string) => {
       const note = notes.find((n) => n.id === id);
-      // 短期メモを復元するときは期限を今から7日後に再設定
+      // 短期メモを復元するときは期限を今から（設定した日数）後に再設定
       updateNote(
         id,
         {
           status: "active",
           trashed_at: null,
           expires_at:
-            note?.type === "short" ? daysFromNowISO(SHORT_NOTE_DAYS) : null,
+            note?.type === "short" ? daysFromNowISO(shortNoteDays) : null,
         },
         true,
       );
     },
-    [notes, updateNote],
+    [notes, updateNote, shortNoteDays],
   );
 
   const deleteNotePermanently = useCallback(
@@ -446,11 +492,41 @@ export function NotesProvider({
     [supabase],
   );
 
+  // 短期メモの日数設定を保存する（アカウント単位。行が無ければ作る）。
+  // 既存メモの expires_at は書き換えないため、変更後に作成・復元・
+  // 短期へ切り替えたメモから新しい日数が適用される。
+  const setShortNoteDays = useCallback(
+    async (days: number) => {
+      const next = Math.min(
+        MAX_SHORT_NOTE_DAYS,
+        Math.max(MIN_SHORT_NOTE_DAYS, Math.round(days)),
+      );
+      const prev = shortNoteDays;
+      if (next === prev) return;
+      // 先に画面へ反映し、保存に失敗したら元へ戻す
+      setShortNoteDaysState(next);
+      const { error } = await supabase
+        .from("user_settings")
+        .upsert(
+          { user_id: userId, short_note_days: next },
+          { onConflict: "user_id" },
+        );
+      if (error) {
+        console.error("設定の保存に失敗:", error.message);
+        setShortNoteDaysState(prev);
+        throw new Error(error.message);
+      }
+    },
+    [supabase, userId, shortNoteDays],
+  );
+
   const value: NotesContextValue = {
     notes,
     folders,
     loading,
     userId,
+    shortNoteDays,
+    setShortNoteDays,
     createNote,
     updateNote,
     setNoteType,
