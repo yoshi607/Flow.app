@@ -169,22 +169,22 @@ export default function Sidebar({
                   className="mx-1 mt-1 w-[calc(100%-0.5rem)] rounded-xl border border-brand-300 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-400 dark:border-neutral-700 dark:bg-neutral-800"
                 />
               )}
+              {/* ゴミ箱はフォルダ一覧の一番下に、少し間をあけて置く。UI 上の並び
+                  だけの話で、データ上はフォルダではない（View も type:"trash" の
+                  まま）。折りたたみの中に入れてあるので、フォルダを閉じると
+                  一緒に隠れる。 */}
+              <div className="mt-2">
+                <button
+                  className={rowClass(isActive({ type: "trash" }))}
+                  onClick={() => onChangeView({ type: "trash" })}
+                >
+                  <IconTrash className="h-4 w-4" />
+                  <span className="flex-1">ゴミ箱</span>
+                  <span className="text-xs text-neutral-400">{trashCount}</span>
+                </button>
+              </div>
             </>
           )}
-
-          {/* ゴミ箱はフォルダ一覧の一番下に、少し間をあけて置く。UI 上の並びだけの
-              話で、データ上はフォルダではない（View も type:"trash" のまま）。
-              フォルダを閉じていても使えるよう、開閉の外に出しておく。 */}
-          <div className="mt-2">
-            <button
-              className={rowClass(isActive({ type: "trash" }))}
-              onClick={() => onChangeView({ type: "trash" })}
-            >
-              <IconTrash className="h-4 w-4" />
-              <span className="flex-1">ゴミ箱</span>
-              <span className="text-xs text-neutral-400">{trashCount}</span>
-            </button>
-          </div>
         </div>
 
         {/* タグ一覧（折り返すチップ表示）。見出しのチェブロンで開閉できる */}

@@ -81,13 +81,14 @@ body {
   @apply text-base font-semibold tracking-tight;
   margin: 0.6em 0 0.3em;
 }
-/* 区切り線（行頭で --- と入力すると入る）。本文は px-4 で左右に余白があるため、
-   その分だけ外へはみ出させて「端まで伸びる」線にする。 */
+/* 区切り線（行頭で --- と入力すると入る）。本文は px-4（16px）で左右に余白が
+   あるので、-12px 外へ出して「両端から 4px 空いた」線にする。
+   ここを -1rem にすると端に密着し、0 にすると本文と同じ幅で内側に寄りすぎる。 */
 .ProseMirror hr {
   height: 0;
   border: 0;
   border-top: 1px solid rgb(0 0 0 / 0.14);
-  margin: 1.1em -1rem;
+  margin: 1.1em -0.75rem;
 }
 .ProseMirror hr.ProseMirror-selectednode {
   border-top-color: rgb(0 0 0 / 0.38);
