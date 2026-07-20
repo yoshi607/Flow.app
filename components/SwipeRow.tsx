@@ -61,6 +61,12 @@ const WHEEL_START_PX = 30;
 // スクロールが止まったとみなすまでの待ち時間。短いと連続スライドの途中の一瞬の
 // 間（momentum の谷）で「ジェスチャー終了」と誤判定してスナップ→カクつく。
 const WHEEL_IDLE_MS = 240;
+// トラックパッドのみに掛ける追従率（1フレームあたり）。
+// タッチの touchmove は画面のリフレッシュに同期して届くので 1:1 で滑らかだが、
+// wheel は 60Hz 前後かつ不揃いなまとまりで届くため、120Hz(ProMotion) では
+// 「イベントが来ないフレーム」が生まれてカクついて見える。毎フレーム目標値へ
+// 少しずつ寄せることで、イベントの無いフレームも中間位置が描かれて滑らかになる。
+const WHEEL_SMOOTHING = 0.35;
 
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
@@ -133,12 +139,16 @@ export default function SwipeRow({
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wheelAccum = useRef(0);
   const wheelBaseRef = useRef(0); // wheel ジェスチャー開始時の位置（反対側へ越えさせない判定用）
+  // wheel は「差分」でしか届かないので、生の積算値と、それに壁/抵抗を適用した
+  // 目標値を分けて持つ。減衰後の値を次の計算に入れ直すと抵抗が二重三重に掛かり、
+  // スクロールしているのに進まない（＝カクつく）ため。
+  const wheelRawRef = useRef(0);
+  const wheelTargetRef = useRef(0);
   const leadingActionRef = useRef(leadingAction);
   leadingActionRef.current = leadingAction;
 
   const actionWidth = compact ? ACTION_WIDTH_COMPACT : ACTION_WIDTH_NORMAL;
   const openWidth = actions.length * actionWidth;
-  const hasLead = !!leadingAction;
   const leadWidth = LEAD_WIDTH;
 
   // 現在位置 x を DOM に直接反映する（content の transform、左右アクションの拡大/不透明度、
@@ -211,6 +221,30 @@ export default function SwipeRow({
     }
   }, []);
 
+  // 「指/トラックパッドが示した生の位置」に壁と抵抗を適用して実際の位置を出す。
+  // touch と wheel で必ず同じ規則になるよう共通化する。入力は常に生の値を渡すこと
+  // （抵抗を掛けた後の値を再入力すると、抵抗が重ねがけになって動きが詰まる）。
+  const clampPosition = useCallback(
+    (raw: number, base: number) => {
+      let next = raw;
+      const rowW = rowWidthRef.current;
+      const screenW = screenWidthRef.current;
+      // 開いていた状態からのスワイプは反対側へ越えさせない（0 でクランプ）。
+      // ＝1回のスライドでは「リストへ戻る」までで、反対側のボタンは出さない。
+      if (base < 0 && next > 0) next = 0;
+      if (base > 0 && next < 0) next = 0;
+      // フル表示幅を超えたぶんはラバーバンドで抵抗させる。リーディングアクションが
+      // 無い行は「0px より右」自体が超過なので、0 を基準に抵抗をかける。
+      const maxRight = leadingActionRef.current ? rowW : 0;
+      if (next > maxRight) next = maxRight + rubberBand(next - maxRight, screenW);
+      if (next < -openWidth) {
+        next = -(openWidth + rubberBand(-next - openWidth, screenW));
+      }
+      return next;
+    },
+    [openWidth],
+  );
+
   // ドラッグ中の 1:1 追従。イベント内でそのまま transform を書く（rAF を挟むと
   // 次フレームまで書き込みが遅れて指から離れて見えるため挟まない。ブラウザは
   // paint 時に最後の値だけ描くので、書き込みが多発しても実質フレーム集約になる）。
@@ -230,6 +264,27 @@ export default function SwipeRow({
       committingRef.current = false;
     }
   }, []);
+
+  // トラックパッド専用の補間ループ。wheel はイベントの来ないフレームがあるため、
+  // 毎フレーム目標値へ寄せて中間位置を描く（タッチは 1:1 のままでここは通らない）。
+  const startWheelLoop = useCallback(() => {
+    if (rafRef.current != null) return;
+    let last = performance.now();
+    const step = (now: number) => {
+      let dt = now - last;
+      last = now;
+      if (dt <= 0) dt = 16.6667;
+      if (dt > 40) dt = 40;
+      // 実 fps に依らず一定の追従率になるよう dt で正規化する。
+      const alpha = 1 - Math.pow(1 - WHEEL_SMOOTHING, dt / 16.6667);
+      const target = wheelTargetRef.current;
+      let x = offsetRef.current + (target - offsetRef.current) * alpha;
+      if (Math.abs(target - x) < 0.1) x = target;
+      moveTo(x);
+      rafRef.current = draggingRef.current ? requestAnimationFrame(step) : null;
+    };
+    rafRef.current = requestAnimationFrame(step);
+  }, [moveTo]);
 
   const springToRef = useRef<(target: number, v0?: number) => void>(() => {});
   const closeSelf = useCallback(() => {
@@ -389,25 +444,20 @@ export default function SwipeRow({
           cancelRaf();
           draggingRef.current = true;
           wheelBaseRef.current = offsetRef.current; // このジェスチャーの開始位置
+          wheelRawRef.current = offsetRef.current; // 生の積算はここから
+          wheelTargetRef.current = offsetRef.current;
           rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
           screenWidthRef.current = window.innerWidth || rowWidthRef.current;
           resetSamples(offsetRef.current);
+          startWheelLoop();
         }
-        const rowW = rowWidthRef.current;
-        const screenW = screenWidthRef.current;
-        const base = wheelBaseRef.current;
-        let next = offsetRef.current - e.deltaX * WHEEL_SENSITIVITY;
-        // 開いていた状態からのスクロールは反対側へ越えさせない（0 でクランプ）。
-        if (base < 0 && next > 0) next = 0;
-        if (base > 0 && next < 0) next = 0;
-        // フル表示幅を超えたぶんはラバーバンドで抵抗させる。
-        const maxRight = leadingActionRef.current ? rowW : 0;
-        if (next > maxRight) next = maxRight + rubberBand(next - maxRight, screenW);
-        if (next < -openWidth) {
-          next = -(openWidth + rubberBand(-next - openWidth, screenW));
-        }
+        // 生の積算値に足し込み、壁と抵抗は「生の値」に対して一度だけ適用する。
+        // （減衰後の位置に足し込むと抵抗が重ねがけになり、スクロールしても
+        //   進まない＝カクついて見える）
+        wheelRawRef.current -= e.deltaX * WHEEL_SENSITIVITY;
+        const next = clampPosition(wheelRawRef.current, wheelBaseRef.current);
+        wheelTargetRef.current = next;
         pushSample(next); // touch と同じ方式で速度を計測（フリック判定用）
-        moveTo(next);
       }
 
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
@@ -416,9 +466,11 @@ export default function SwipeRow({
         draggingRef.current = false;
         // touch と同じスナップ判定に集約。開始位置を base に渡すことで、開いていた
         // 状態からのスクロールは必ずリストへ戻す（反対側は出さない）。
+        // 位置判定は補間の途中ではなく、実際に指示された到達点(target)で行う。
+        // バネの開始位置は表示中の offsetRef なので見た目は連続したまま。
         settleRef.current(
           wheelBaseRef.current,
-          offsetRef.current,
+          wheelTargetRef.current,
           lastVelRef.current,
         );
       }, WHEEL_IDLE_MS);
@@ -436,7 +488,8 @@ export default function SwipeRow({
     disabled,
     beginOpen,
     cancelRaf,
-    moveTo,
+    clampPosition,
+    startWheelLoop,
     pushSample,
     resetSamples,
   ]);
@@ -481,20 +534,9 @@ export default function SwipeRow({
     if (axis.current !== "x") return;
 
     // 指の座標に 1:1 で一致させる（イージング・トランジションは一切かけない）。
-    let next = start.current.base + (dx - start.current.slop);
-    const rowW = rowWidthRef.current;
-    const screenW = screenWidthRef.current;
-    // 開いていた状態からのスワイプは反対側へ越えさせない（0 でクランプ）。
-    // ＝1回のスライドでは「リストへ戻る」までで、反対側のボタンは出さない。
-    if (start.current.base < 0 && next > 0) next = 0;
-    if (start.current.base > 0 && next < 0) next = 0;
-    // フル表示幅を超えたぶんはラバーバンドで抵抗させる。リーディングアクションが
-    // 無い行は「0px より右」自体が超過なので、0 を基準に抵抗をかける。
-    const maxRight = hasLead ? rowW : 0;
-    if (next > maxRight) next = maxRight + rubberBand(next - maxRight, screenW);
-    if (next < -openWidth) {
-      next = -(openWidth + rubberBand(-next - openWidth, screenW));
-    }
+    // 壁と抵抗は「生の位置」に対して一度だけ適用する（wheel と共通の規則）。
+    const raw = start.current.base + (dx - start.current.slop);
+    const next = clampPosition(raw, start.current.base);
 
     // 指の速度計測（フリック判定用・直近ウィンドウの実移動量）
     pushSample(next);
