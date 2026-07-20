@@ -79,6 +79,36 @@ const WHEEL_SMOOTHING = 0.55;
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
 
+// ===== 一時的な計測コード（原因の裏付けが取れたらこのブロックごと削除する） =====
+// トラックパッドのカクつき調査用。wheel イベント／補間フレーム／スナップ判定を
+// 1ジェスチャーぶん溜めて、静止したときに console.table でまとめて出す。
+// ループ内で console を呼ぶとそれ自体がジャンク要因になるので push だけに留める。
+const WHEEL_DEBUG = true;
+type DebugRow = Record<string, string | number | boolean | null>;
+const debugLog: DebugRow[] = [];
+let debugLastWheelT = 0;
+const r2 = (n: number) => Math.round(n * 100) / 100;
+function dbg(kind: string, fields: DebugRow) {
+  if (!WHEEL_DEBUG) return;
+  debugLog.push({ t: r2(performance.now()), kind, ...fields });
+  // spring が最後まで収束しないまま操作が続くと flush されないので、上限で古い方を捨てる。
+  if (debugLog.length > 1200) debugLog.splice(0, debugLog.length - 1200);
+}
+function dbgFlush(reason: string) {
+  if (!WHEEL_DEBUG || debugLog.length === 0) return;
+  const rows = debugLog.splice(0, debugLog.length);
+  const t0 = Number(rows[0].t);
+  for (const r of rows) r.t = r2(Number(r.t) - t0);
+  console.groupCollapsed(
+    `[SwipeRow] ${reason} — ${rows.length} rows / ${r2(
+      Number(rows[rows.length - 1].t),
+    )}ms`,
+  );
+  console.table(rows);
+  console.groupEnd();
+}
+// ===== 計測コードここまで =====
+
 // フル表示幅を超えて引いたぶんの抵抗（ラバーバンド）。
 //   実際の移動量 = フル表示幅 + 超過量 / (1 + 超過量 / 画面幅)
 // 引くほど重くなり、画面幅ぶん引いても超過は半分までしか進まない。
@@ -325,6 +355,14 @@ export default function SwipeRow({
       const target = wheelTargetRef.current;
       let x = offsetRef.current + (target - offsetRef.current) * alpha;
       if (Math.abs(target - x) < 0.1) x = target;
+      // 計測: フレーム間 dt に穴が無いか、補間の残差が詰まっているか
+      dbg("frame", {
+        dt: r2(dt),
+        from: r2(offsetRef.current),
+        target: r2(target),
+        residual: r2(target - offsetRef.current),
+        x: r2(x),
+      });
       moveTo(x);
       rafRef.current = draggingRef.current ? requestAnimationFrame(step) : null;
     };
@@ -347,6 +385,13 @@ export default function SwipeRow({
       draggingRef.current = false;
       let x = offsetRef.current;
       let v = v0 * 1000; // px/ms -> px/s
+      // 計測: どこから・どの初速で・どこへ向かうか
+      dbg("spring", {
+        from: r2(x),
+        target: r2(target),
+        v0: r2(v0),
+        restPos: r2(restPosRef.current),
+      });
       // どちら側から target へ向かうか。行き過ぎ（跳ね返り）はこの逆側に出る。
       const fromSign = Math.sign(x - target);
       let last = performance.now();
@@ -376,6 +421,8 @@ export default function SwipeRow({
           if (target === 0 && openRegistry.close === closeSelf) {
             openRegistry.close = null;
           }
+          dbg("rest", { target: r2(target) });
+          dbgFlush(`settled at ${r2(target)}`);
           return;
         }
         offsetRef.current = x;
@@ -404,6 +451,18 @@ export default function SwipeRow({
     const rowW = rowWidthRef.current;
     const wasZone = committingRef.current;
     committingRef.current = false;
+    // 計測: 判定に使う値一式。原因1 = base と restPos/offset の食い違い、
+    // 原因2 = wheelAge が大きいのに |v| が FLICK_VELOCITY を超えていないか。
+    dbg("settle", {
+      base: r2(base),
+      pos: r2(pos),
+      v: r2(v),
+      flick: Math.abs(v) > FLICK_VELOCITY,
+      restPos: r2(restPosRef.current),
+      offset: r2(offsetRef.current),
+      wasZone,
+      wheelAge: debugLastWheelT ? r2(performance.now() - debugLastWheelT) : null,
+    });
 
     if (base !== 0) {
       // 開いていた状態から：反対側へは越えられない（0 にクランプ済み）。閉じ方向へ
@@ -488,6 +547,26 @@ export default function SwipeRow({
       const engaged =
         offsetRef.current !== 0 || Math.abs(wheelAccum.current) > WHEEL_START_PX;
 
+      // 計測: 原因3 = ジェスチャー中盤に engaged=false が挟まらないか。
+      // deltaX のバースト具合（evDt が数ms と数百ms を行き来する）もここで見る。
+      if (WHEEL_DEBUG) {
+        const now = performance.now();
+        dbg("wheel", {
+          dx: r2(e.deltaX),
+          evDt: debugLastWheelT ? r2(now - debugLastWheelT) : null,
+          engaged,
+          accum: r2(wheelAccum.current),
+          raw: r2(wheelRawRef.current),
+          target: r2(wheelTargetRef.current),
+          offset: r2(offsetRef.current),
+          restPos: r2(restPosRef.current),
+          wheelBase: r2(wheelBaseRef.current),
+          dragging: draggingRef.current,
+          vel: r2(lastVelRef.current),
+        });
+        debugLastWheelT = now;
+      }
+
       if (engaged) {
         beginOpen();
         if (!draggingRef.current) {
@@ -517,6 +596,12 @@ export default function SwipeRow({
 
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
       wheelTimer.current = setTimeout(() => {
+        dbg("idle", {
+          sinceLastWheel: r2(performance.now() - debugLastWheelT),
+          target: r2(wheelTargetRef.current),
+          offset: r2(offsetRef.current),
+          vel: r2(lastVelRef.current),
+        });
         wheelAccum.current = 0;
         draggingRef.current = false;
         // touch と同じスナップ判定に集約。開始位置を base に渡すことで、開いていた
@@ -554,6 +639,9 @@ export default function SwipeRow({
   }
 
   function onTouchStart(e: React.TouchEvent) {
+    // 計測: 指の操作では wheelAge が意味を持たないので、前の wheel の残りを消す。
+    debugLastWheelT = 0;
+    dbg("touchstart", { offset: r2(offsetRef.current), restPos: r2(restPosRef.current) });
     // 割り込み：バネ収束中でも触れた瞬間に現在位置から追従を再開。
     cancelRaf();
     draggingRef.current = false;
