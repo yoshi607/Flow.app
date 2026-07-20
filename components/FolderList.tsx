@@ -176,7 +176,10 @@ export default function FolderList({
             actions={actionsFor(f)}
             disabled={dragId === f.id}
             compact
-            contentClassName="rounded-2xl bg-brand-50 dark:bg-neutral-900"
+            // 角丸は外枠だけに持たせる。カード側に付けると、ズレたときに丸角の
+            // 隙間から背後の四角いアクションボタンが覗いてしまう。
+            className="rounded-2xl"
+            contentClassName="bg-brand-50 dark:bg-neutral-900"
           >
             <div className="group relative">
               <button
