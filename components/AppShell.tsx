@@ -15,6 +15,8 @@ import { type Note } from "@/lib/types";
 import { stripHtml } from "@/lib/utils";
 import Sidebar, { type View } from "./Sidebar";
 import NoteList from "./NoteList";
+// 【一時的】スワイプのカクつき調査用のオーバーレイ。調査が済んだら削除する。
+import SwipeDebugOverlay from "./SwipeDebugOverlay";
 
 // 本文エディタは Tiptap 一式・手書き・画像書き出しを連れてくるため重い。
 // 起動時（メモ未選択）は不要なので、初期JSから切り離して遅延読み込みする。
@@ -796,6 +798,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      {/* 【一時的】スワイプのカクつき調査用。lib/swipeDebug.ts ごと削除する。 */}
+      <SwipeDebugOverlay />
     </div>
   );
 }

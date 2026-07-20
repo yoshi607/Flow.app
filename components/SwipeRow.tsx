@@ -9,6 +9,17 @@ import {
   type ReactNode,
 } from "react";
 import { useDevice } from "@/lib/useDevice";
+// 【一時的】スワイプのカクつき調査用の計測。裏付けが取れたら lib/swipeDebug.ts ごと
+// 削除し、この import と下記の dbg(...) 呼び出しも消すこと。
+import {
+  WHEEL_DEBUG,
+  dbg,
+  dbgFlush,
+  r2,
+  markWheelEvent,
+  getLastWheelT,
+  resetLastWheelT,
+} from "@/lib/swipeDebug";
 
 // paint 前に DOM を合わせ直したい（再レンダーで位置が飛ぶのを防ぐ）。SSR では
 // useLayoutEffect が警告を出すので、サーバーでは useEffect にフォールバック。
@@ -79,35 +90,6 @@ const WHEEL_SMOOTHING = 0.55;
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
 
-// ===== 一時的な計測コード（原因の裏付けが取れたらこのブロックごと削除する） =====
-// トラックパッドのカクつき調査用。wheel イベント／補間フレーム／スナップ判定を
-// 1ジェスチャーぶん溜めて、静止したときに console.table でまとめて出す。
-// ループ内で console を呼ぶとそれ自体がジャンク要因になるので push だけに留める。
-const WHEEL_DEBUG = true;
-type DebugRow = Record<string, string | number | boolean | null>;
-const debugLog: DebugRow[] = [];
-let debugLastWheelT = 0;
-const r2 = (n: number) => Math.round(n * 100) / 100;
-function dbg(kind: string, fields: DebugRow) {
-  if (!WHEEL_DEBUG) return;
-  debugLog.push({ t: r2(performance.now()), kind, ...fields });
-  // spring が最後まで収束しないまま操作が続くと flush されないので、上限で古い方を捨てる。
-  if (debugLog.length > 1200) debugLog.splice(0, debugLog.length - 1200);
-}
-function dbgFlush(reason: string) {
-  if (!WHEEL_DEBUG || debugLog.length === 0) return;
-  const rows = debugLog.splice(0, debugLog.length);
-  const t0 = Number(rows[0].t);
-  for (const r of rows) r.t = r2(Number(r.t) - t0);
-  console.groupCollapsed(
-    `[SwipeRow] ${reason} — ${rows.length} rows / ${r2(
-      Number(rows[rows.length - 1].t),
-    )}ms`,
-  );
-  console.table(rows);
-  console.groupEnd();
-}
-// ===== 計測コードここまで =====
 
 // フル表示幅を超えて引いたぶんの抵抗（ラバーバンド）。
 //   実際の移動量 = フル表示幅 + 超過量 / (1 + 超過量 / 画面幅)
@@ -461,7 +443,7 @@ export default function SwipeRow({
       restPos: r2(restPosRef.current),
       offset: r2(offsetRef.current),
       wasZone,
-      wheelAge: debugLastWheelT ? r2(performance.now() - debugLastWheelT) : null,
+      wheelAge: getLastWheelT() ? r2(performance.now() - getLastWheelT()) : null,
     });
 
     if (base !== 0) {
@@ -553,7 +535,7 @@ export default function SwipeRow({
         const now = performance.now();
         dbg("wheel", {
           dx: r2(e.deltaX),
-          evDt: debugLastWheelT ? r2(now - debugLastWheelT) : null,
+          evDt: getLastWheelT() ? r2(now - getLastWheelT()) : null,
           engaged,
           accum: r2(wheelAccum.current),
           raw: r2(wheelRawRef.current),
@@ -564,7 +546,7 @@ export default function SwipeRow({
           dragging: draggingRef.current,
           vel: r2(lastVelRef.current),
         });
-        debugLastWheelT = now;
+        markWheelEvent(now);
       }
 
       if (engaged) {
@@ -597,7 +579,7 @@ export default function SwipeRow({
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
       wheelTimer.current = setTimeout(() => {
         dbg("idle", {
-          sinceLastWheel: r2(performance.now() - debugLastWheelT),
+          sinceLastWheel: r2(performance.now() - getLastWheelT()),
           target: r2(wheelTargetRef.current),
           offset: r2(offsetRef.current),
           vel: r2(lastVelRef.current),
@@ -640,7 +622,7 @@ export default function SwipeRow({
 
   function onTouchStart(e: React.TouchEvent) {
     // 計測: 指の操作では wheelAge が意味を持たないので、前の wheel の残りを消す。
-    debugLastWheelT = 0;
+    resetLastWheelT();
     dbg("touchstart", { offset: r2(offsetRef.current), restPos: r2(restPosRef.current) });
     // 割り込み：バネ収束中でも触れた瞬間に現在位置から追従を再開。
     cancelRaf();
