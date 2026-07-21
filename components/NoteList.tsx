@@ -147,7 +147,8 @@ export default function NoteList({
             key: "long",
             label: "長期保存",
             icon: <IconArchive />,
-            className: "bg-brand-500",
+            // 共有(neutral-500)・移動(brand-500)と見分けやすい緑系にする
+            className: "bg-emerald-500",
             onClick: () => setNoteType(note.id, "long"),
           }
         : {
