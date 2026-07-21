@@ -38,8 +38,12 @@ export interface SwipeAction {
   onClick: () => void;
 }
 
-const ACTION_WIDTH_NORMAL = 72; // 1アクションあたりの幅(px)
+const ACTION_WIDTH_NORMAL = 80; // 1アクションあたりの幅(px)
 const ACTION_WIDTH_COMPACT = 64; // 背の低い行（フォルダ一覧）向けの詰めた幅
+// アクションが出現し始めるまでの「遊び」（開き割合 rr のうち、この割合ぶんは
+// まだ出さない）。指を引き始めてすぐには出さず、少し引いてからせり上がらせる。
+// 0〜1。大きいほど出現が遅れる。全ボタン一律に遅らせる（相対的な段差は保つ）。
+const ACTION_REVEAL_LEAD = 0.16;
 const LEAD_WIDTH = 192; // 右スワイプで出るリーディングアクション（ピン留め）の幅。横長。
 // 右へ「振り切った（行幅分いっぱいまでスワイプ）」とみなす割合。
 const LEAD_COMMIT_RATIO = 0.9;
@@ -114,6 +118,14 @@ const openRegistry: { close: (() => void) | null } = { close: null };
 // 引くほど重くなり、画面幅ぶん引いても超過は半分までしか進まない。
 function rubberBand(over: number, screenW: number) {
   return over / (1 + over / Math.max(1, screenW));
+}
+
+// アクションのせり上がりに使う「実効の開き割合」。頭に ACTION_REVEAL_LEAD ぶんの
+// 遊びを設け、そこを過ぎてから 0→1 へ進める（全ボタン一律に出現を遅らせる。相対的な
+// 段差は保つ）。rr=1 では必ず 1 に達するので、開ききった時は従来どおり完全に出そろう。
+function revealRatio(rr: number) {
+  if (rr <= ACTION_REVEAL_LEAD) return 0;
+  return (rr - ACTION_REVEAL_LEAD) / (1 - ACTION_REVEAL_LEAD);
 }
 
 // 振り切りの合図（対応端末のみ・iOS は無視される）。
@@ -221,7 +233,8 @@ export default function SwipeRow({
       trailWrapRef.current.style.width = `${trailW}px`;
     }
     // 左スワイプ（右側アクション）：右端が先に、手前ほど後にせり上がる
-    const rr = openWidth > 0 ? Math.min(1, Math.max(0, -x) / openWidth) : 0;
+    const rr =
+      openWidth > 0 ? revealRatio(Math.min(1, Math.max(0, -x) / openWidth)) : 0;
     for (let i = 0; i < nActions; i++) {
       const btn = actionBtnRefs.current[i];
       if (!btn) continue;
@@ -753,7 +766,8 @@ export default function SwipeRow({
 
   // 初期 style（再レンダー時にこの静止位置で描く。以後の動きは applyOffset が上書き）。
   const initTx = restOffset;
-  const rr0 = openWidth > 0 ? Math.min(1, Math.max(0, -restOffset) / openWidth) : 0;
+  const rr0 =
+    openWidth > 0 ? revealRatio(Math.min(1, Math.max(0, -restOffset) / openWidth)) : 0;
   const lr0 = leadWidth > 0 ? Math.min(1, Math.max(0, restOffset) / leadWidth) : 0;
 
   return (

@@ -21,6 +21,7 @@ import {
   IconPin,
   IconShare,
   IconMove,
+  IconArchive,
   IconTrash,
   IconRestore,
 } from "./icons";
@@ -112,7 +113,8 @@ export default function NoteList({
   deletingId?: string | null;
   sidebarCollapsed?: boolean;
 }) {
-  const { folders, emptyTrash, restoreNote, updateNote, togglePin } = useNotes();
+  const { folders, emptyTrash, restoreNote, updateNote, togglePin, setNoteType } =
+    useNotes();
   // 「移動」対象のメモ（フォルダ選択シートを開く）
   const [movingNote, setMovingNote] = useState<Note | null>(null);
 
@@ -137,6 +139,24 @@ export default function NoteList({
         },
       ];
     }
+    // 短期メモは中央を「長期保存」に差し替える（移動は本文側のメニューから可能）。
+    // 長期メモは従来どおりフォルダ「移動」。
+    const middle: SwipeAction =
+      note.type === "short"
+        ? {
+            key: "long",
+            label: "長期保存",
+            icon: <IconArchive />,
+            className: "bg-brand-500",
+            onClick: () => setNoteType(note.id, "long"),
+          }
+        : {
+            key: "move",
+            label: "移動",
+            icon: <IconMove />,
+            className: "bg-brand-500",
+            onClick: () => setMovingNote(note),
+          };
     return [
       {
         key: "share",
@@ -145,13 +165,7 @@ export default function NoteList({
         className: "bg-neutral-500",
         onClick: () => shareNote(note.title, note.body),
       },
-      {
-        key: "move",
-        label: "移動",
-        icon: <IconMove />,
-        className: "bg-brand-500",
-        onClick: () => setMovingNote(note),
-      },
+      middle,
       {
         key: "trash",
         label: "削除",
