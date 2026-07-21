@@ -38,7 +38,7 @@ export interface SwipeAction {
   onClick: () => void;
 }
 
-const ACTION_WIDTH_NORMAL = 80; // 1アクションあたりの幅(px)
+const ACTION_WIDTH_NORMAL = 120; // 1アクションあたりの幅(px)
 const ACTION_WIDTH_COMPACT = 64; // 背の低い行（フォルダ一覧）向けの詰めた幅
 // アクションが出現し始めるまでの「遊び」（開き割合 rr のうち、この割合ぶんは
 // まだ出さない）。指を引き始めてすぐには出さず、少し引いてからせり上がらせる。
@@ -791,8 +791,8 @@ export default function SwipeRow({
               style={{
                 width: actionWidth,
                 flexShrink: 0,
-                // 余った幅は一番左のボタンだけが受け取る
-                flexGrow: i === 0 ? 1 : 0,
+                // 振り切って余った幅は3ボタンで均等に受け取る（全ボタン同じ割合で伸びる）
+                flexGrow: 1,
               }}
               className={`flex ${compact ? "p-0.5" : "p-1"}`}
             >
@@ -807,8 +807,8 @@ export default function SwipeRow({
                 style={{ transform: `scale(${0.2 + 0.8 * p})`, opacity: p }}
                 className={`flow-press flow-swipe-action flex flex-1 flex-col items-center justify-center font-medium text-white ${
                   compact
-                    ? "gap-0.5 rounded-xl text-[10px] leading-none"
-                    : "gap-1 rounded-[1.6rem] text-xs"
+                    ? "gap-0.5 rounded-2xl text-[10px] leading-none"
+                    : "gap-1 rounded-[2.4rem] text-xs"
                 } ${a.className}`}
               >
                 <span
@@ -843,7 +843,7 @@ export default function SwipeRow({
                 transform: `scale(${0.2 + 0.8 * lr0})`,
                 opacity: lr0,
               }}
-              className={`flow-press flow-swipe-action flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.6rem] text-xs font-medium text-white ${leadingAction.className}`}
+              className={`flow-press flow-swipe-action flex flex-1 flex-col items-center justify-center gap-1 rounded-[2.4rem] text-xs font-medium text-white ${leadingAction.className}`}
             >
               <span className="flex h-5 w-5 items-center justify-center">
                 {leadingAction.icon}
