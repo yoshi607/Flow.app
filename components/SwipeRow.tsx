@@ -38,7 +38,7 @@ export interface SwipeAction {
   onClick: () => void;
 }
 
-const ACTION_WIDTH_NORMAL = 120; // 1アクションあたりの幅(px)
+const ACTION_WIDTH_NORMAL = 96; // 1アクションあたりの幅(px)
 const ACTION_WIDTH_COMPACT = 64; // 背の低い行（フォルダ一覧）向けの詰めた幅
 // アクションが出現し始めるまでの「遊び」（開き割合 rr のうち、この割合ぶんは
 // まだ出さない）。指を引き始めてすぐには出さず、少し引いてからせり上がらせる。
