@@ -9,17 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { useDevice } from "@/lib/useDevice";
-// 【一時的】スワイプのカクつき調査用の計測。裏付けが取れたら lib/swipeDebug.ts ごと
-// 削除し、この import と下記の dbg(...) 呼び出しも消すこと。
-import {
-  WHEEL_DEBUG,
-  dbg,
-  dbgFlush,
-  r2,
-  markWheelEvent,
-  getLastWheelT,
-  resetLastWheelT,
-} from "@/lib/swipeDebug";
 
 // paint 前に DOM を合わせ直したい（再レンダーで位置が飛ぶのを防ぐ）。SSR では
 // useLayoutEffect が警告を出すので、サーバーでは useEffect にフォールバック。
@@ -198,7 +187,7 @@ export default function SwipeRow({
   // 最後に wheel が届いた時刻。速度をどれだけ信用するかの判断に使う。
   const wheelLastEventTRef = useRef(0);
   // 追従ループから「操作終了→スナップ」を呼ぶための控え（定義は後段）。
-  const endWheelGestureRef = useRef<(reason: string) => void>(() => {});
+  const endWheelGestureRef = useRef<() => void>(() => {});
   const wheelBaseRef = useRef(0); // wheel ジェスチャー開始時の位置（反対側へ越えさせない判定用）
   // wheel は「差分」でしか届かないので、生の積算値と、それに壁/抵抗を適用した
   // 目標値を分けて持つ。減衰後の値を次の計算に入れ直すと抵抗が二重三重に掛かり、
@@ -375,14 +364,6 @@ export default function SwipeRow({
       const target = wheelTargetRef.current;
       let x = offsetRef.current + (target - offsetRef.current) * alpha;
       if (Math.abs(target - x) < 0.1) x = target;
-      // 計測: フレーム間 dt に穴が無いか、補間の残差が詰まっているか
-      dbg("frame", {
-        dt: r2(dt),
-        from: r2(offsetRef.current),
-        target: r2(target),
-        residual: r2(target - offsetRef.current),
-        x: r2(x),
-      });
       moveTo(x);
       // 操作終了の判定はここで行う（固定時間のタイマーを待たない）。最後の入力から
       // 一定の間が空いたら、目標へ追いつくのを待たず、その瞬間の位置・速度のまま
@@ -391,7 +372,7 @@ export default function SwipeRow({
       // active dragging 中は毎フレーム wheel が届いていて quiet が伸びないので発火しない。
       const quiet = now - wheelLastEventTRef.current;
       if (quiet >= WHEEL_SETTLE_QUIET_MS) {
-        endWheelGestureRef.current("released");
+        endWheelGestureRef.current();
         return; // ループはここで終了（settle→spring が新しい rAF を張る）
       }
       rafRef.current = draggingRef.current ? requestAnimationFrame(step) : null;
@@ -421,13 +402,6 @@ export default function SwipeRow({
       restPosRef.current = target;
       let x = offsetRef.current;
       let v = v0 * 1000; // px/ms -> px/s
-      // 計測: どこから・どの初速で・どこへ向かうか
-      dbg("spring", {
-        from: r2(x),
-        target: r2(target),
-        v0: r2(v0),
-        restPos: r2(restPosRef.current),
-      });
       // どちら側から target へ向かうか。行き過ぎ（跳ね返り）はこの逆側に出る。
       const fromSign = Math.sign(x - target);
       let last = performance.now();
@@ -457,8 +431,6 @@ export default function SwipeRow({
           if (target === 0 && openRegistry.close === closeSelf) {
             openRegistry.close = null;
           }
-          dbg("rest", { target: r2(target) });
-          dbgFlush(`settled at ${r2(target)}`);
           return;
         }
         offsetRef.current = x;
@@ -487,18 +459,6 @@ export default function SwipeRow({
     const rowW = rowWidthRef.current;
     const wasZone = committingRef.current;
     committingRef.current = false;
-    // 計測: 判定に使う値一式。原因1 = base と restPos/offset の食い違い、
-    // 原因2 = wheelAge が大きいのに |v| が FLICK_VELOCITY を超えていないか。
-    dbg("settle", {
-      base: r2(base),
-      pos: r2(pos),
-      v: r2(v),
-      flick: Math.abs(v) > FLICK_VELOCITY,
-      restPos: r2(restPosRef.current),
-      offset: r2(offsetRef.current),
-      wasZone,
-      wheelAge: getLastWheelT() ? r2(performance.now() - getLastWheelT()) : null,
-    });
 
     if (base !== 0) {
       // 開いていた状態から：反対側へは越えられない（0 にクランプ済み）。閉じ方向へ
@@ -547,7 +507,7 @@ export default function SwipeRow({
   // どちらから呼ばれても同じ。二重に走らないよう、既に終了していれば何もしない）。
   // 速度は「最後に入力が届いた時点」の値なので、そこからの経過時間ぶん弱めてから
   // スナップ判定に渡す（止めた操作がフリック扱いになるのを防ぐ）。
-  const endWheelGesture = useCallback((reason: string) => {
+  const endWheelGesture = useCallback(() => {
     if (!draggingRef.current && !wheelEngagedRef.current) return;
     if (wheelTimer.current) {
       clearTimeout(wheelTimer.current);
@@ -558,15 +518,6 @@ export default function SwipeRow({
     draggingRef.current = false;
     const age = performance.now() - wheelLastEventTRef.current;
     const decay = Math.max(0, 1 - age / WHEEL_VELOCITY_GRACE_MS);
-    dbg("idle", {
-      reason,
-      age: r2(age),
-      target: r2(wheelTargetRef.current),
-      offset: r2(offsetRef.current),
-      raw: r2(lastVelRef.current),
-      decay: r2(decay),
-      used: r2(lastVelRef.current * decay),
-    });
     // 開始位置(base)を渡すことで、開いていた状態からのスクロールは必ずリストへ戻す。
     // 位置判定は補間の途中ではなく指示された到達点(target)で行う。バネの開始位置は
     // 表示中の offsetRef なので見た目は連続したまま。
@@ -622,26 +573,6 @@ export default function SwipeRow({
         wheelEngagedRef.current || Math.abs(wheelAccum.current) > WHEEL_START_PX;
       wheelLastEventTRef.current = performance.now();
 
-      // 計測: 原因3 = ジェスチャー中盤に engaged=false が挟まらないか。
-      // deltaX のバースト具合（evDt が数ms と数百ms を行き来する）もここで見る。
-      if (WHEEL_DEBUG) {
-        const now = performance.now();
-        dbg("wheel", {
-          dx: r2(e.deltaX),
-          evDt: getLastWheelT() ? r2(now - getLastWheelT()) : null,
-          engaged,
-          accum: r2(wheelAccum.current),
-          raw: r2(wheelRawRef.current),
-          target: r2(wheelTargetRef.current),
-          offset: r2(offsetRef.current),
-          restPos: r2(restPosRef.current),
-          wheelBase: r2(wheelBaseRef.current),
-          dragging: draggingRef.current,
-          vel: r2(lastVelRef.current),
-        });
-        markWheelEvent(now);
-      }
-
       if (engaged) {
         beginOpen();
         wheelEngagedRef.current = true;
@@ -674,7 +605,7 @@ export default function SwipeRow({
       // 何らかの理由でループが回っていない場合に備えて残す（同じ終了処理を呼ぶ）。
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
       wheelTimer.current = setTimeout(() => {
-        endWheelGestureRef.current("idle-timeout");
+        endWheelGestureRef.current();
       }, WHEEL_IDLE_MS);
     };
 
@@ -701,9 +632,6 @@ export default function SwipeRow({
   }
 
   function onTouchStart(e: React.TouchEvent) {
-    // 計測: 指の操作では wheelAge が意味を持たないので、前の wheel の残りを消す。
-    resetLastWheelT();
-    dbg("touchstart", { offset: r2(offsetRef.current), restPos: r2(restPosRef.current) });
     // 割り込み：バネ収束中でも触れた瞬間に現在位置から追従を再開。
     cancelRaf();
     draggingRef.current = false;
