@@ -807,8 +807,8 @@ export default function SwipeRow({
                 style={{ transform: `scale(${0.2 + 0.8 * p})`, opacity: p }}
                 className={`flow-press flow-swipe-action flex flex-1 flex-col items-center justify-center font-medium text-white ${
                   compact
-                    ? "gap-0.5 rounded-2xl text-[10px] leading-none"
-                    : "gap-1 rounded-[2.4rem] text-xs"
+                    ? "gap-0.5 rounded-xl text-[10px] leading-none"
+                    : "gap-1 rounded-[1.6rem] text-xs"
                 } ${a.className}`}
               >
                 <span
@@ -843,7 +843,7 @@ export default function SwipeRow({
                 transform: `scale(${0.2 + 0.8 * lr0})`,
                 opacity: lr0,
               }}
-              className={`flow-press flow-swipe-action flex flex-1 flex-col items-center justify-center gap-1 rounded-[2.4rem] text-xs font-medium text-white ${leadingAction.className}`}
+              className={`flow-press flow-swipe-action flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.6rem] text-xs font-medium text-white ${leadingAction.className}`}
             >
               <span className="flex h-5 w-5 items-center justify-center">
                 {leadingAction.icon}
