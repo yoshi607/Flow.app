@@ -148,7 +148,13 @@ export function NotesProvider({
     };
   }, [refresh]);
 
-  // リアルタイム購読（他デバイスの変更を反映）
+  // メモのリアルタイム購読（他デバイスの変更を反映）。
+  // folders は別チャンネルにする（下）。1つのチャンネルに複数の
+  // postgres_changes を相乗りさせると、2つ目の購読（＝folders）にイベントが
+  // 配信されず、「メモは同期するのにフォルダだけ他端末へ届かない」状態に
+  // なることがある。実際に、変更した端末（例：iPad）は自分のローカル更新で
+  // 正しく見えるが、他端末（iPhone/PC）にフォルダの変更が来ない、という症状が
+  // これに当たる。user_settings と同様、テーブルごとにチャンネルを分ける。
   useEffect(() => {
     const channel = supabase
       .channel("realtime-notes")
@@ -174,25 +180,6 @@ export function NotesProvider({
           });
         },
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "folders", filter: `user_id=eq.${userId}` },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const old = payload.old as { id: string };
-            setFolders((prev) => prev.filter((x) => x.id !== old.id));
-            return;
-          }
-          const row = payload.new as Folder;
-          setFolders((prev) => {
-            const idx = prev.findIndex((x) => x.id === row.id);
-            if (idx === -1) return [...prev, row];
-            const copy = [...prev];
-            copy[idx] = row;
-            return copy;
-          });
-        },
-      )
       .subscribe((status) => {
         // 再接続時は、切断中に取りこぼした変更に追いつくため取り直す。
         // 初回の購読成功時はサーバー側で先読み済みなのでスキップする。
@@ -206,6 +193,51 @@ export function NotesProvider({
       supabase.removeChannel(channel);
     };
   }, [supabase, userId, refresh, keepLocal]);
+
+  // フォルダのリアルタイム購読（専用チャンネル）。上のメモとは分けることで、
+  // 相乗りによる配信漏れを避け、作成・名前変更・削除・並べ替えを全端末へ
+  // 確実に届ける。
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime-folders")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "folders",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const old = payload.old as { id: string };
+            setFolders((prev) => prev.filter((x) => x.id !== old.id));
+            return;
+          }
+          const row = payload.new as Folder;
+          setFolders((prev) => {
+            const idx = prev.findIndex((x) => x.id === row.id);
+            const merged =
+              idx === -1
+                ? [...prev, row]
+                : prev.map((f) => (f.id === row.id ? row : f));
+            // sort_order（同値なら作成日時）で並べ直す。他端末での並べ替え・
+            // 作成が、こちらでも同じ順序で反映されるようにする（初回取得と同じ規則）。
+            return merged.sort(
+              (a, b) =>
+                a.sort_order - b.sort_order ||
+                new Date(a.created_at).getTime() -
+                  new Date(b.created_at).getTime(),
+            );
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, userId]);
 
   // 設定（user_settings）のリアルタイム購読。
   // メモ/フォルダとは別チャンネルにしている。0007_user_settings.sql を

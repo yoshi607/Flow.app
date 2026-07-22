@@ -217,14 +217,19 @@ export default function SettingsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4"
       onClick={onClose}
     >
+      {/* スマホでは設定の内容が画面より高くなる。パネル全体を高さ上限つきの
+          縦フレックスにし、ヘッダー（×）は固定・中身だけをスクロールさせる。
+          こうしないと内容が画面外にあふれ、×にも届かず「戻れない・スクロール
+          できない」状態になる（パネルは fixed 上に置かれ、ページ側は
+          overflow-hidden なので、内側にスクロールを持たせる必要がある）。 */}
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col rounded-2xl bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="flex shrink-0 items-center justify-between px-6 pb-4 pt-6">
           <h3 className="text-lg font-bold">設定</h3>
           <button
             onClick={onClose}
@@ -234,7 +239,7 @@ export default function SettingsDialog({
           </button>
         </div>
 
-        <div className="space-y-4 text-sm">
+        <div className="thin-scroll space-y-4 overflow-y-auto px-6 pb-6 text-sm">
           <div>
             <div className="text-neutral-400">ログイン中のアカウント</div>
             <div className="font-medium">{userEmail || "（不明）"}</div>
