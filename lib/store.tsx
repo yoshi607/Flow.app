@@ -84,8 +84,6 @@ export function NotesProvider({
   // 直近にローカル編集した時刻（リアルタイム上書きの誤爆防止）
   const lastEditedAt = useRef<Record<string, number>>({});
   const refreshing = useRef(false);
-  // 一度でも購読に成功したか（初回とその後の再接続を区別するため）
-  const subscribedOnce = useRef(false);
 
   // このメモはローカルを優先すべきか
   // （保存中 or 未保存の差分が残っている or 直近3秒に自分が編集した）。
@@ -110,22 +108,31 @@ export function NotesProvider({
         notes: fresh,
         folders: freshFolders,
         shortNoteDays: freshShortNoteDays,
+        notesError,
+        foldersError,
       } = await fetchInitialNotesData(supabase);
 
-      setNotes((prev) => {
-        const prevById = new Map(prev.map((n) => [n.id, n]));
-        // 編集中のメモはサーバー値で上書きしない（入力中の文字が消えるのを防ぐ）
-        const merged = fresh.map((n) =>
-          keepLocal(n.id) ? (prevById.get(n.id) ?? n) : n,
-        );
-        // 取得結果に無い＝他端末で削除済み。ただし編集直後のものは念のため残す
-        const freshIds = new Set(fresh.map((n) => n.id));
-        const localOnly = prev.filter(
-          (n) => !freshIds.has(n.id) && keepLocal(n.id),
-        );
-        return [...localOnly, ...merged];
-      });
-      setFolders(freshFolders);
+      // 【重要】取得に失敗したときは今の状態を保つ（空配列で上書きしない）。
+      // モバイルはアプリ復帰の瞬間に一時的にオフラインなことがあり、そこで
+      // refresh が走ると fetch が失敗して data が null → 空配列になる。これを
+      // 反映すると全メモが画面から消え、次の成功時に復活する＝「見れたり
+      // 見れなかったり」になる。失敗時は据え置き、次の成功で追いつく。
+      if (!notesError) {
+        setNotes((prev) => {
+          const prevById = new Map(prev.map((n) => [n.id, n]));
+          // 編集中のメモはサーバー値で上書きしない（入力中の文字が消えるのを防ぐ）
+          const merged = fresh.map((n) =>
+            keepLocal(n.id) ? (prevById.get(n.id) ?? n) : n,
+          );
+          // 取得結果に無い＝他端末で削除済み。ただし編集直後のものは念のため残す
+          const freshIds = new Set(fresh.map((n) => n.id));
+          const localOnly = prev.filter(
+            (n) => !freshIds.has(n.id) && keepLocal(n.id),
+          );
+          return [...localOnly, ...merged];
+        });
+      }
+      if (!foldersError) setFolders(freshFolders);
       // 取得できたときだけ更新（失敗時は今の設定を保つ）
       if (freshShortNoteDays !== null) setShortNoteDaysState(freshShortNoteDays);
     } finally {
@@ -181,12 +188,13 @@ export function NotesProvider({
         },
       )
       .subscribe((status) => {
-        // 再接続時は、切断中に取りこぼした変更に追いつくため取り直す。
-        // 初回の購読成功時はサーバー側で先読み済みなのでスキップする。
-        if (status === "SUBSCRIBED") {
-          if (subscribedOnce.current) refresh();
-          subscribedOnce.current = true;
-        }
+        // 購読が確立したら（初回・再接続とも）必ず最新を取り直す。
+        // 初回はサーバー先読みがあるが、PWA は起動時に HTML をキャッシュから
+        // 返す（next.config.mjs の NetworkFirst）ため、初期メモが古いままの
+        // ことがある。他端末で作った/消したメモが起動直後に反映されず端末間で
+        // ズレる原因になるので、購読確立のたびに DB の現在値へ合わせる。
+        // 失敗時は refresh 側が現状を保つため、余計な全消しは起きない。
+        if (status === "SUBSCRIBED") refresh();
       });
 
     return () => {

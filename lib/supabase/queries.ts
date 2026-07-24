@@ -42,5 +42,11 @@ export async function fetchInitialNotesData(supabase: SupabaseClient) {
     shortNoteDays: settingsRes.error
       ? null
       : (settings?.short_note_days ?? DEFAULT_SHORT_NOTE_DAYS),
+    // 【重要】取得が成功したかどうかを呼び出し側へ伝える。
+    // オフライン等で失敗すると data は null → 上の ?? [] で空配列になるが、
+    // これを「メモ0件」として画面へ反映すると全メモが消えてしまう。
+    // refresh 側はこのフラグを見て、失敗時は今の状態を保つ（空で上書きしない）。
+    notesError: Boolean(notesRes.error),
+    foldersError: Boolean(foldersRes.error),
   };
 }
