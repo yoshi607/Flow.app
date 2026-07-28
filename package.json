@@ -8,8 +8,11 @@
     "start": "next start",
     "lint": "next lint"
   },
+  "engines": {
+    "node": "24.x"
+  },
   "dependencies": {
-    "@anthropic-ai/sdk": "latest",
+    "@anthropic-ai/sdk": "^0.111.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "@tiptap/extension-placeholder": "^3.27.3",

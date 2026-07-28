@@ -185,13 +185,65 @@ npm run dev
 
 ## インターネットに公開する（Vercel・無料）
 
-1. このフォルダを GitHub リポジトリにプッシュ。
-2. [vercel.com](https://vercel.com/) にログイン →「Add New Project」→ 該当リポジトリを選択。
-3. **Environment Variables** に `.env.local` と同じ内容を登録
-   （`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / 音声を使うなら
-   `GROQ_API_KEY` / `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`）。
-4. Deploy。発行された URL を、手順5の Supabase「URL Configuration」の
-   Site URL / Redirect URLs に追加。
+### 1. GitHub にプッシュ
+
+```powershell
+git init
+git add -A
+git commit -m "initial commit"
+git branch -M main
+git remote add origin https://github.com/<ユーザー名>/<リポジトリ名>.git
+git push -u origin main
+```
+
+> `.env.local`（APIキー）や `node_modules` は `.gitignore` 済みなので、
+> 誤ってアップロードされることはありません。
+
+### 2. Vercel にインポート
+
+1. [vercel.com](https://vercel.com/) に GitHub アカウントでログイン。
+2. 「Add New…」→「Project」→ 上でプッシュしたリポジトリを **Import**。
+3. Framework Preset は **Next.js** が自動で選ばれます。
+   Build Command / Output Directory / Install Command は**すべて既定のまま**でOK。
+   （Root Directory も変更不要）
+
+### 3. 環境変数を登録
+
+「Environment Variables」に以下を追加します（Production / Preview / Development
+すべてにチェック）。値は `.env.local` と同じものです。
+
+| 変数名 | 必須 | 用途 |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase の Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase の anon public キー |
+| `GROQ_API_KEY` | 音声メモを使うなら | 文字起こし（Groq Whisper） |
+| `ANTHROPIC_API_KEY` | 音声メモを使うなら | 整形・タイトル生成（Claude） |
+| `ANTHROPIC_MODEL` | 任意 | 未設定なら `claude-opus-4-8` |
+
+> **重要**：キーの前後に空白や改行が混ざらないよう、貼り付け後に確認してください。
+> 環境変数を後から追加・変更した場合は、**再デプロイしないと反映されません**
+> （Deployments →「…」→ Redeploy）。
+
+### 4. Deploy → Supabase 側の URL 設定
+
+1. 「Deploy」を押してビルド完了を待ちます（数分）。
+2. 発行された URL（例 `https://xxxx.vercel.app`）をコピー。
+3. Supabase の「Authentication」→「URL Configuration」で
+   - **Site URL** … 発行された URL
+   - **Redirect URLs** … `https://xxxx.vercel.app/auth/callback` を追加
+     （ローカル開発も続けるなら `http://localhost:3000/auth/callback` も残す）
+4. Google ログインを使う場合は、Google Cloud の OAuth クライアントの
+   「承認済みのリダイレクト URI」に Supabase のコールバック URL が入っているか確認。
+
+### 5. 動作確認
+
+公開 URL を開いて、新規登録 → ログイン → メモ作成 → 別端末で同期、の順に確認します。
+うまくいかない場合は Vercel の **Deployments → 該当デプロイ → Logs** に
+エラーの詳細（どのAPIが何を返したか）が出ています。
+
+> 補足：Node.js のバージョンは `package.json` の `engines` で **24.x** に固定しています
+> （既存の Vercel プロジェクト `flow-app` の設定と同じ値）。Project Settings → General →
+> Node.js Version を変える場合は、`package.json` 側も合わせて変更してください。
 
 ---
 
