@@ -170,16 +170,16 @@ export default function FolderList({
           onPointerCancel={endDrag}
           className={dragId === f.id ? "flow-reorder-dragging relative z-10" : ""}
         >
-          {/* 前面の地色はサイドバーに合わせる。既定の白のままだと、
-              選択ハイライトの丸角のまわりに白い四角が見えてしまう。
-              スマホ（md 未満）はサイドバー自体が透明なので地色を敷かず、
-              スワイプ中だけ globals.css 側で地色を戻す（背後のアクション
-              ボタンが文字に透けて重なるのを防ぐため）。 */}
+          {/* 行そのものには地色を敷かない（色が付くのは選択中の1行だけ）。
+              SwipeRow の既定は bg-white だが、それだと未選択の行が明るい塊として
+              並んで見えてしまうため打ち消している。
+              ただしスワイプ中だけは globals.css 側で地色を入れる。透明のままだと
+              背後のアクションボタンが行の文字に透けて重なるため。 */}
           <SwipeRow
             actions={actionsFor(f)}
             disabled={dragId === f.id}
             compact
-            contentClassName="flow-folder-row rounded-2xl md:bg-brand-50"
+            contentClassName="flow-folder-row rounded-2xl"
           >
             <div className="group relative">
               <button
