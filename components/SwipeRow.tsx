@@ -690,6 +690,13 @@ export default function SwipeRow({
   function onTouchEnd() {
     if (axis.current !== "x") {
       axis.current = "none";
+      // 横スワイプにならなかった＝ただのタップ／縦スクロール。
+      // onTouchStart で付けた操作中フラグをここで必ず外す。外し忘れると
+      // 「触った行だけフラグが残り続ける」状態になり、このフラグに紐づく
+      // スタイル（フォルダ行のスワイプ中の地色）が付きっぱなしになる。
+      // ただしバネで戻っている最中（静止位置に居ない）は、収束時に
+      // setActive(false) されるのでここでは触らない。
+      if (offsetRef.current === 0) setActive(false);
       return;
     }
     axis.current = "none";
