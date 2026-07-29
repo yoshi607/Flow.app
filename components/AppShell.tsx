@@ -642,17 +642,24 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           />
         </div>
       </div>
-      {/* 背景タップでも閉じる。ドラッグ中は暗さも指の位置に追従させる */}
+      {/* 背景タップでも閉じる。ドラッグ中は暗さも指の位置に追従させる。
+          ※ 暗くするのは「奥にあるメモ一覧」だけで、ドロワー自身は暗くしない。
+            スマホではドロワーに地色を敷いていない（すりガラスのみ）ため、
+            inset-0 で全面に敷くとこの暗がりがドロワーを透けて見え、
+            フォルダ一覧までグレーアウトして見えてしまう。
+            そこで左端をドロワーの右端に合わせ、ドラッグ中はその位置も
+            指に追従させる（ドロワーとの間に隙間ができないように）。 */}
       {(sidebarOpen || dragX !== null) && (
         <div
-          className="fixed inset-0 z-20 bg-black/30 md:hidden"
+          className="fixed inset-y-0 right-0 z-20 bg-black/30 md:hidden"
           style={
             dragX !== null
               ? {
+                  left: sidebarWidth() + dragX,
                   opacity: 1 + dragX / sidebarWidth(),
                   transition: "none",
                 }
-              : undefined
+              : { left: "16rem" } // = w-64（ドロワー幅）
           }
           onClick={() => setSidebarOpen(false)}
         />
