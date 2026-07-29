@@ -9,12 +9,14 @@ import {
   IconPlus,
   IconSettings,
   IconClock,
+  IconArchive,
   IconCollapse,
   IconChevron,
 } from "./icons";
 
 export type View =
   | { type: "all" }
+  | { type: "long" }
   | { type: "short" }
   | { type: "trash" }
   | { type: "folder"; folderId: string }
@@ -38,6 +40,9 @@ export default function Sidebar({
   const [foldersOpen, setFoldersOpen] = useState(true);
 
   const activeCount = notes.filter((n) => n.status === "active").length;
+  const longCount = notes.filter(
+    (n) => n.status === "active" && n.type === "long",
+  ).length;
   const shortCount = notes.filter(
     (n) => n.status === "active" && n.type === "short",
   ).length;
@@ -78,7 +83,9 @@ export default function Sidebar({
     }`;
 
   return (
-    <div className="flex h-full flex-col bg-brand-50/80 backdrop-blur-xl safe-top border-r border-brand-200/60">
+    // スマホ（md 未満）では地色を敷かない。ドロワーとして手前に重なるため、
+    // 背後のメモ一覧がすりガラス越しに透ける見え方にする（md 以上は従来どおり）。
+    <div className="flex h-full flex-col backdrop-blur-xl md:bg-brand-50/80 safe-top border-r border-brand-200/60">
       <div className="flex items-center gap-1 px-4 py-4">
         <h1 className="flex-1 text-xl font-semibold tracking-tight">Flow</h1>
         {/* フォルダ一覧を最小化（md以上のみ。モバイルはドロワーなので不要） */}
@@ -102,6 +109,17 @@ export default function Sidebar({
           <IconNotes className="h-4 w-4" />
           <span className="flex-1">すべてのメモ</span>
           <span className="text-xs text-neutral-400">{activeCount}</span>
+        </button>
+
+        {/* 長期メモ：type=long のメモを集めた固定フォルダ。短期メモと対になる。
+            短期メモと同じく、データ上のフォルダではなく View で切り替える。 */}
+        <button
+          className={rowClass(isActive({ type: "long" }))}
+          onClick={() => onChangeView({ type: "long" })}
+        >
+          <IconArchive className="h-4 w-4" />
+          <span className="flex-1">長期メモ</span>
+          <span className="text-xs text-neutral-400">{longCount}</span>
         </button>
 
         {/* 短期メモ（⑧）：type=short のメモを集めた固定フォルダ。削除不可。 */}

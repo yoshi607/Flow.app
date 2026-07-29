@@ -13,14 +13,14 @@ const SEGMENT_MS = 5000;
 type Phase = "recording" | "finishing" | "error";
 
 // 録音バー。録音中は onPartial で「ここまでの文字起こし」を随時通知し、
-// 停止後に Claude で整形した結果を onFinal で返す。
+// 停止後に全区切りを繋いだ文字起こしを onFinal で返す。
 export default function VoiceRecorder({
   onPartial,
   onFinal,
   onCancel,
 }: {
   onPartial: (text: string) => void;
-  onFinal: (r: { title: string; text: string }) => void;
+  onFinal: (text: string) => void;
   onCancel: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("recording");
@@ -149,7 +149,7 @@ export default function VoiceRecorder({
     else finalize();
   }
 
-  // 残りの文字起こしを待ってから Claude で整形して返す
+  // 残りの区切りの文字起こしを待ってから、繋いだ全文を返す
   async function finalize() {
     stopTracks();
     try {
@@ -162,24 +162,7 @@ export default function VoiceRecorder({
       cb.current.onCancel();
       return;
     }
-
-    let title = "";
-    let text = raw;
-    try {
-      const res = await fetch("/api/format", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: raw }),
-      });
-      if (res.ok) {
-        const j = await res.json();
-        title = j.title || "";
-        text = j.text || raw;
-      }
-    } catch {
-      // 整形に失敗しても素の文字起こしを使う
-    }
-    cb.current.onFinal({ title, text });
+    cb.current.onFinal(raw);
   }
 
   function cancel() {
@@ -243,7 +226,7 @@ export default function VoiceRecorder({
           <>
             <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-neutral-200 border-t-brand-500" />
             <span className="flex-1 text-sm text-neutral-500">
-              文章を整えています…
+              文字起こしを仕上げています…
             </span>
           </>
         )}

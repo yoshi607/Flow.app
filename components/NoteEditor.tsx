@@ -434,15 +434,13 @@ export default function NoteEditor({
     writeCallout(toAppendedParagraphs(text), true);
   }
 
-  // 停止後：整形済みのテキストを確定させる
-  function handleFinal(result: { title: string; text: string }) {
+  // 停止後：文字起こしの全文を確定させる
+  function handleFinal(text: string) {
     setRecording(false);
-    writeCallout(toAppendedParagraphs(result.text), false);
+    writeCallout(toAppendedParagraphs(text), false);
     sessionRef.current = null;
     if (!editor) return;
-    const patch: Partial<Note> = { body: editor.getHTML() };
-    if (!note.title.trim() && result.title) patch.title = result.title;
-    updateNote(note.id, patch, true);
+    updateNote(note.id, { body: editor.getHTML() }, true);
   }
 
   // 取り消し／無音だった場合：空のコールアウトを残さず削除する

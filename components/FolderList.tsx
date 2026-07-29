@@ -171,12 +171,15 @@ export default function FolderList({
           className={dragId === f.id ? "flow-reorder-dragging relative z-10" : ""}
         >
           {/* 前面の地色はサイドバーに合わせる。既定の白のままだと、
-              選択ハイライトの丸角のまわりに白い四角が見えてしまう */}
+              選択ハイライトの丸角のまわりに白い四角が見えてしまう。
+              スマホ（md 未満）はサイドバー自体が透明なので地色を敷かず、
+              スワイプ中だけ globals.css 側で地色を戻す（背後のアクション
+              ボタンが文字に透けて重なるのを防ぐため）。 */}
           <SwipeRow
             actions={actionsFor(f)}
             disabled={dragId === f.id}
             compact
-            contentClassName="rounded-2xl bg-brand-50"
+            contentClassName="flow-folder-row rounded-2xl md:bg-brand-50"
           >
             <div className="group relative">
               <button

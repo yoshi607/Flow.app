@@ -12,7 +12,7 @@ Apple 純正メモの代わりに、どの端末からでも同じメモにア�
 - 全端末でのリアルタイム同期（Supabase）
 - 横断検索（タイトル・本文・フォルダ名。ゴミ箱は対象外）
 - ピン留め
-- **音声メモ**（録音 → Groq Whisper で文字起こし → Claude で整形・タイトル自動生成）
+- **音声メモ**（録音 → Groq Whisper で文字起こし → 本文へ追記）
 - PWA（ホーム画面に追加してアプリのように使える／オフライン閲覧）
 
 ---
@@ -149,8 +149,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=（anon public キー）
 
 - **Groq**（文字起こし・無料枠あり）：[console.groq.com/keys](https://console.groq.com/keys)
   で API キーを発行 → `.env.local` の `GROQ_API_KEY` に設定。
-- **Anthropic Claude**（整形・タイトル生成）：[console.anthropic.com](https://console.anthropic.com/)
-  で API キーを発行 → `.env.local` の `ANTHROPIC_API_KEY` に設定。
 
 ---
 
@@ -217,8 +215,6 @@ git push -u origin main
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase の Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase の anon public キー |
 | `GROQ_API_KEY` | 音声メモを使うなら | 文字起こし（Groq Whisper） |
-| `ANTHROPIC_API_KEY` | 音声メモを使うなら | 整形・タイトル生成（Claude） |
-| `ANTHROPIC_MODEL` | 任意 | 未設定なら `claude-opus-4-8` |
 
 > **重要**：キーの前後に空白や改行が混ざらないよう、貼り付け後に確認してください。
 > 環境変数を後から追加・変更した場合は、**再デプロイしないと反映されません**
@@ -269,7 +265,6 @@ git push -u origin main
 | PWA | @ducanh2912/next-pwa |
 | 認証・DB・ストレージ | Supabase |
 | 音声文字起こし | Groq Whisper (whisper-large-v3) |
-| テキスト整形 | Claude API (claude-opus-4-8) |
 | 自動削除バッチ | Supabase pg_cron |
 | ホスティング | Vercel |
 
@@ -278,7 +273,6 @@ git push -u origin main
 ```
 app/            画面とAPIルート（App Router）
   api/transcribe  Groq 文字起こし
-  api/format      Claude 整形
 components/      UI コンポーネント
 lib/            Supabase クライアント・型・ストア・ユーティリティ
 supabase/       DB マイグレーション（SQL）

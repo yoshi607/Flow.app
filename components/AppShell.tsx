@@ -304,6 +304,9 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
     } else if (view.type === "short") {
       // 短期メモフォルダ（⑧）：type=short のアクティブなメモ
       list = notes.filter((n) => n.status === "active" && n.type === "short");
+    } else if (view.type === "long") {
+      // 長期メモフォルダ：type=long のアクティブなメモ
+      list = notes.filter((n) => n.status === "active" && n.type === "long");
     } else if (view.type === "folder") {
       list = notes.filter(
         (n) => n.status === "active" && n.folder_id === view.folderId,
@@ -383,7 +386,10 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   async function handleCreate(origin?: DOMRect) {
     const folderId = view.type === "folder" ? view.folderId : null;
     const tag = view.type === "tag" ? [view.tag] : undefined;
-    const note = await createNote({ folder_id: folderId, type: "short", tags: tag });
+    // 長期メモフォルダで作ったメモは長期にする。既定（短期）のままだと
+    // 作った直後に、今開いている一覧から消えてしまうため。
+    const type = view.type === "long" ? "long" : "short";
+    const note = await createNote({ folder_id: folderId, type, tags: tag });
     if (!note) return;
 
     // 一覧側：新しい行を上から「ぽんっ」と落として収める
