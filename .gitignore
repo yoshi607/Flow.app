@@ -18,6 +18,8 @@ next-env.d.ts
 /public/workbox-*.js.map
 /public/swe-worker-*.js
 /public/fallback-*.js
+/public/worker-*.js
+/public/worker-*.js.map
 
 # misc
 .DS_Store

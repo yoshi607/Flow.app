@@ -13,6 +13,10 @@ const withPWA = withPWAInit({
   // 取り直すため、リロードで取り戻すものは無い。
   reloadOnOnline: false,
   disable: process.env.NODE_ENV === "development",
+  // worker/index.js をコンパイルして public/worker-*.js を生成し、sw.js から
+  // importScripts させる。プッシュ通知の push / notificationclick ハンドラは
+  // そこに置いている（next-pwa が生成する sw.js は直接編集できないため）。
+  customWorkerSrc: "worker",
   // next-pwa が自動追加する "/" 専用キャッシュルート（タイムアウト設定が無く
   // ネットワークを待ち続けうる）を無効化し、下記の navigate ルート1本（3秒タイムアウト）に統一する。
   // ("/" は認証状態でリダイレクトが変わる動的ルートで静的プリキャッシュ対象にはならないため無効化しても安全)
