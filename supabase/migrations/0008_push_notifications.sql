@@ -75,9 +75,30 @@ alter table public.push_notifications_sent enable row level security;
 -- authenticated 向けのポリシーは作らない＝アプリからは一切見えない。
 
 -- ------------------------------------------------------------
---  テーブルレベルの権限付与
+--  テーブルレベルの権限付与（アプリ側 / authenticated）
 --  push_subscriptions のみ。push_notifications_sent は
---  service role 専用なので authenticated には渡さない。
+--  送信側専用なので authenticated には渡さない。
 -- ------------------------------------------------------------
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.push_subscriptions to authenticated;
+
+-- ------------------------------------------------------------
+--  テーブルレベルの権限付与（配信バッチ / service_role）
+--
+--  配信バッチ(/api/cron/expiry-notify)は service_role で動く。
+--  service_role は RLS（行単位の制御）は迂回するが、テーブルレベルの
+--  権限（GRANT）は別物で、無いと
+--    permission denied for table notes
+--  になる。このプロジェクトのテーブルは SQL Editor から作られており、
+--  0001 / 0007 では authenticated にしか GRANT していないため、
+--  ここで service_role にも明示的に与える。
+--
+--  与えるのは配信バッチが実際に使う操作だけに絞る：
+--   - notes                   … 期限が近いメモを探す（読むだけ）
+--   - push_subscriptions      … 宛先を読む／無効になった宛先を消す
+--   - push_notifications_sent … 送信済みを読む／記録する（upsert=insert+update）
+-- ------------------------------------------------------------
+grant usage on schema public to service_role;
+grant select on public.notes to service_role;
+grant select, delete on public.push_subscriptions to service_role;
+grant select, insert, update on public.push_notifications_sent to service_role;
