@@ -50,8 +50,8 @@ export default function FolderPickerSheet({
           onClick={() => onPick(null)}
           className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition ${
             currentFolderId === null
-              ? "bg-brand-100 text-brand-700"
-              : "hover:bg-brand-100/70"
+              ? "bg-neutral-200/80 text-neutral-900"
+              : "hover:bg-neutral-100"
           }`}
         >
           <IconFolder className="h-4 w-4 opacity-60" />

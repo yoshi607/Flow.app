@@ -67,11 +67,13 @@ export default function Sidebar({
 
   const isActive = (v: View) => JSON.stringify(v) === JSON.stringify(view);
 
+  // 明るい地色の上に置くので、色が付くのは「選択中の1行」だけ。
+  // 選択の印は薄いグレーにして、明るい面の中で穏やかに沈んで見えるようにする。
   const rowClass = (active: boolean) =>
     `flex items-center gap-2.5 w-full px-3 py-2 rounded-2xl text-sm text-left transition ${
       active
-        ? "bg-brand-100 text-brand-700"
-        : "hover:bg-brand-100/70"
+        ? "bg-neutral-200/80 text-neutral-900"
+        : "hover:bg-neutral-100"
     }`;
 
   // タグのチップ（ピル）表示
@@ -83,9 +85,11 @@ export default function Sidebar({
     }`;
 
   return (
-    // スマホ（md 未満）では地色を敷かない。ドロワーとして手前に重なるため、
-    // 背後のメモ一覧がすりガラス越しに透ける見え方にする（md 以上は従来どおり）。
-    <div className="flex h-full flex-col backdrop-blur-xl md:bg-brand-50/80 safe-top border-r border-brand-200/60">
+    // フォルダ一覧は明るい地色にする（メモ一覧と同じ白ベース）。
+    // 以前は brand-50 の青みがかったグレーだったが、その上に行ごとの地色が
+    // 乗ることで「グレーの上に明るい塊が並ぶ」見え方になっていた。
+    // 地色は面（この div）だけが持ち、行は選択中のものだけ色を付ける。
+    <div className="flex h-full flex-col bg-white/80 backdrop-blur-xl safe-top border-r border-brand-200/60">
       <div className="flex items-center gap-1 px-4 py-4">
         <h1 className="flex-1 text-xl font-semibold tracking-tight">Flow</h1>
         {/* フォルダ一覧を最小化（md以上のみ。モバイルはドロワーなので不要） */}
