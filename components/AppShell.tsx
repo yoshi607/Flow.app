@@ -87,6 +87,24 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   // 画面左端からのドラッグとみなす幅
   const EDGE_PX = 28;
 
+  // プッシュ通知から開かれたときの初期表示（例: /?view=short）。
+  // まとめ通知のタップ先が「短期メモ一覧」だが、View は URL と同期していない
+  // ローカル state なので、入口としてここで一度だけ反映する。
+  // 反映後はパラメータを消し、以降のフォルダ切替やリロードの邪魔をしない。
+  // ※ paint 前に走るので、すべてのメモ→短期メモの切り替わりは見えない。
+  useIsoLayoutEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("view") !== "short") return;
+    setView({ type: "short" });
+    params.delete("view");
+    const rest = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (rest ? `?${rest}` : ""),
+    );
+  }, []);
+
   // 一覧を描き終えた後、手が空いた時間にエディタ本体を先読みしておく。
   // 起動の速さは保ったまま、メモを開く瞬間は待たされない。
   useEffect(() => {

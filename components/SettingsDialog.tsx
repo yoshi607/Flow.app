@@ -11,6 +11,15 @@ import {
   TRASH_RETENTION_DAYS,
 } from "@/lib/types";
 import splashScreens from "@/lib/splashScreens.json";
+import {
+  isPushSupported,
+  isStandalone,
+  isIOS,
+  permissionState,
+  getSubscription,
+  subscribePush,
+  unsubscribePush,
+} from "@/lib/push";
 import { IconClose } from "./icons";
 
 // 短期メモの日数のよく使う候補（これ以外は数値入力で指定できる）
@@ -60,6 +69,52 @@ export default function SettingsDialog({
   useEffect(() => {
     setDaysInput(String(shortNoteDays));
   }, [shortNoteDays]);
+
+  // --- プッシュ通知（短期メモの期限リマインド） ---
+  // この端末が購読済みか。null = まだ調べ終えていない。
+  const [pushOn, setPushOn] = useState<boolean | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPushSupported()) {
+      setPushOn(false);
+      return;
+    }
+    let alive = true;
+    getSubscription()
+      .then((sub) => {
+        if (alive) setPushOn(!!sub);
+      })
+      .catch(() => {
+        if (alive) setPushOn(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // トグル。requestPermission() は「ユーザー操作から始まる処理」でないと
+  // iOS が拒否するため、必ずこの onClick から呼ぶこと。
+  async function togglePush() {
+    setPushError(null);
+    setPushBusy(true);
+    try {
+      if (pushOn) {
+        await unsubscribePush();
+        setPushOn(false);
+      } else {
+        await subscribePush();
+        setPushOn(true);
+      }
+    } catch (err) {
+      setPushError(
+        err instanceof Error ? err.message : "通知の設定を変更できませんでした",
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   async function saveDays(days: number) {
     if (!Number.isFinite(days)) {
@@ -380,6 +435,66 @@ export default function SettingsDialog({
               短期メモから適用されます（すでにあるメモの残り日数は変わりません）。
             </p>
             {daysError && <p className="mt-1 text-xs text-red-600">{daysError}</p>}
+          </div>
+
+          {/* プッシュ通知。短期メモが期限の2日前になった日の朝9時に、
+              その日ぶんをまとめて1通だけ届ける。 */}
+          <div className="rounded-lg border border-neutral-200 p-3">
+            <div className="font-medium">期限が近いメモの通知</div>
+            <p className="mt-0.5 text-xs text-neutral-400">
+              短期メモがゴミ箱へ移動する2日前の朝9時に、その日ぶんをまとめて
+              1回だけお知らせします。
+            </p>
+
+            {!isPushSupported() ? (
+              // iOS はホーム画面に追加した PWA でしか通知を使えない。
+              // 「非対応」で終わらせず、次にやることを出す。
+              <p className="mt-2 text-xs text-neutral-500">
+                {isIOS() && !isStandalone()
+                  ? "共有ボタンから「ホーム画面に追加」すると、通知を受け取れるようになります。"
+                  : "この端末・ブラウザでは通知を利用できません。"}
+              </p>
+            ) : permissionState() === "denied" ? (
+              // 一度拒否されると JS からは再要求できない
+              <p className="mt-2 text-xs text-neutral-500">
+                通知がブロックされています。端末の設定から Flow の通知を許可してから、
+                この画面を開き直してください。
+              </p>
+            ) : (
+              <div className="mt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={togglePush}
+                  disabled={pushBusy || pushOn === null}
+                  aria-pressed={pushOn === true}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
+                    pushOn
+                      ? "bg-neutral-200 text-neutral-700 hover:bg-neutral-300"
+                      : "bg-brand-500 text-white hover:bg-brand-600"
+                  }`}
+                >
+                  {pushBusy
+                    ? "設定中…"
+                    : pushOn === null
+                      ? "確認中…"
+                      : pushOn
+                        ? "通知を止める"
+                        : "通知を受け取る"}
+                </button>
+                <span className="text-xs text-neutral-400">
+                  {pushOn === null
+                    ? ""
+                    : pushOn
+                      ? "この端末は通知ONです"
+                      : "この端末は通知OFFです"}
+                </span>
+              </div>
+            )}
+
+            <p className="mt-2 text-xs text-neutral-400">
+              設定は端末ごとです。複数の端末で受け取るには、それぞれで通知をONにしてください。
+            </p>
+            {pushError && <p className="mt-1 text-xs text-red-600">{pushError}</p>}
           </div>
 
           <div className="rounded-lg bg-neutral-100 p-3">

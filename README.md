@@ -13,6 +13,7 @@ Apple 純正メモの代わりに、どの端末からでも同じメモにア�
 - 横断検索（タイトル・本文・フォルダ名。ゴミ箱は対象外）
 - ピン留め
 - **音声メモ**（録音 → Groq Whisper で文字起こし → 本文へ追記）
+- **プッシュ通知**（短期メモがゴミ箱へ移動する2日前の朝9時に、まとめて1通お知らせ）
 - PWA（ホーム画面に追加してアプリのように使える／オフライン閲覧）
 
 ---
@@ -83,6 +84,11 @@ Supabase はデータベース・認証・ファイル保存をまとめて提�
    も同様に貼り付けて **「Run」**。
    - 設定画面で変更する値（短期メモの保存日数）を入れる `user_settings` テーブルが作られます。
    - このテーブルが無いと、設定画面の日数変更が保存できません（既定の7日のまま動作します）。
+
+4. [`supabase/migrations/0008_push_notifications.sql`](supabase/migrations/0008_push_notifications.sql)
+   も同様に貼り付けて **「Run」**。
+   - プッシュ通知の宛先（`push_subscriptions`）と送信済み記録（`push_notifications_sent`）が作られます。
+   - 通知を使わない場合は実行しなくても構いません（通知以外の機能には影響しません）。
 
 ### 4. ストレージ（画像・添付用）
 
@@ -215,10 +221,19 @@ git push -u origin main
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase の Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase の anon public キー |
 | `GROQ_API_KEY` | 音声メモを使うなら | 文字起こし（Groq Whisper） |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 通知を使うなら | ブラウザ側の購読に使う公開鍵 |
+| `VAPID_PRIVATE_KEY` | 通知を使うなら | 配信時の署名に使う秘密鍵 |
+| `VAPID_SUBJECT` | 通知を使うなら | `mailto:` 形式の連絡先 |
+| `SUPABASE_SERVICE_ROLE_KEY` | 通知を使うなら | 配信バッチが全ユーザーの期限を調べる |
+| `CRON_SECRET` | 通知を使うなら | 配信バッチを外部から叩かれないようにする |
 
 > **重要**：キーの前後に空白や改行が混ざらないよう、貼り付け後に確認してください。
 > 環境変数を後から追加・変更した場合は、**再デプロイしないと反映されません**
 > （Deployments →「…」→ Redeploy）。
+
+> **`SUPABASE_SERVICE_ROLE_KEY` は取扱注意です。** RLS（行レベルのアクセス制御）を
+> 完全に迂回して全ユーザーのデータを読めるキーなので、**絶対に `NEXT_PUBLIC_` を
+> 付けないでください**（付けるとブラウザに配信され、誰でも全データを読めてしまいます）。
 
 ### 4. Deploy → Supabase 側の URL 設定
 
@@ -257,6 +272,26 @@ git push -u origin main
 
 ---
 
+## プッシュ通知の仕組み
+
+短期メモが**ゴミ箱へ移動する2日前**の**朝9時（日本時間）**に、その日ぶんを
+**まとめて1通**お知らせします。
+
+- 通知は**オプトイン**です。設定画面の「期限が近いメモの通知」からONにした端末にだけ届きます。
+  設定は端末ごとなので、複数端末で受け取るにはそれぞれでONにしてください。
+- 対象が複数のときは `3件の短期メモが2日後にゴミ箱へ移動します` のようにまとめ、
+  タップすると短期メモ一覧が開きます。1件だけのときはメモ名を出し、タップでそのメモが開きます。
+- メモの本文は通知に含めません（ロック画面に出るため）。
+- 配信は Vercel Cron が毎日 UTC 0:00（＝日本時間 9:00）に
+  `/api/cron/expiry-notify` を呼んで行います（[`vercel.json`](vercel.json)）。
+- 同じメモに二度通知しないよう、送信済みを `push_notifications_sent` に記録しています。
+
+> **iPhone / iPad では、「ホーム画面に追加」した PWA でのみ通知が届きます**
+> （iOS 16.4 以降）。Safari のタブで開いている間は届きません。これは iOS 側の仕様で、
+> アプリ側では回避できません。
+
+---
+
 ## 技術構成
 
 | レイヤー | 技術 |
@@ -266,6 +301,7 @@ git push -u origin main
 | 認証・DB・ストレージ | Supabase |
 | 音声文字起こし | Groq Whisper (whisper-large-v3) |
 | 自動削除バッチ | Supabase pg_cron |
+| プッシュ通知 | Web Push (web-push) + Vercel Cron |
 | ホスティング | Vercel |
 
 ## フォルダ構成（概要）
@@ -273,8 +309,11 @@ git push -u origin main
 ```
 app/            画面とAPIルート（App Router）
   api/transcribe  Groq 文字起こし
+  api/push        通知の購読・解除
+  api/cron        通知の配信バッチ（Vercel Cron から呼ばれる）
 components/      UI コンポーネント
 lib/            Supabase クライアント・型・ストア・ユーティリティ
+worker/         カスタム Service Worker（プッシュ通知の受信・表示）
 supabase/       DB マイグレーション（SQL）
 scripts/        アイコン生成スクリプト
 public/         PWA マニフェスト・アイコン
