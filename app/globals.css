@@ -471,6 +471,13 @@ body {
 .flow-swipe-active .flow-swipe-action {
   will-change: transform, opacity;
 }
+/* フォルダ一覧の行は、スマホではサイドバーごと地色を敷かない（透明）。
+   ただし透明のままスワイプすると、背後のアクションボタンが行の文字と
+   重なって透けてしまうため、操作中だけ地色を戻す。
+   md 以上は元から bg-brand-50 なので見た目は変わらない。 */
+.flow-swipe-active .flow-folder-row {
+  @apply bg-brand-50;
+}
 
 /* 並べ替え中のフォルダ（④） */
 .flow-reorder-dragging {
