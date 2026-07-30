@@ -10,16 +10,27 @@ export const dynamic = "force-dynamic";
 
 // 通知の種類。push_notifications_sent.kind に入る値。
 const KIND = "expiry_2d";
-// 期限の何日前に通知するか
-const DAYS_BEFORE = 2;
-// 通知本文に並べるメモのタイトル数の上限
+// 期限まで何日以内のメモを対象にするか
+const WITHIN_DAYS = 2;
+// 1行に並べるメモのタイトル数の上限（超えた分は「ほか◯件」にまとめる）
 const MAX_TITLES = 3;
+
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type NoteRow = {
   id: string;
   user_id: string;
   title: string;
   body: string;
+  expires_at: string;
+};
+
+/** 通知用に「残り日数」と「表示名」を添えたメモ */
+type NoteForNotify = {
+  id: string;
+  name: string;
+  daysLeft: number;
 };
 
 type SubscriptionRow = {
@@ -29,46 +40,52 @@ type SubscriptionRow = {
 };
 
 /**
- * 「JST の暦日で DAYS_BEFORE 日後」の1日ぶんを UTC の範囲で返す。
+ * ある時刻が属する「JST の暦日の 00:00」を UTC のミリ秒で返す。
  *
- * expires_at は timestamptz なので、日付だけで比較するには範囲に直す必要がある。
- * JST(UTC+9・夏時間なし) の D 日は UTC では [D 00:00 - 9h, D+1 00:00 - 9h)。
+ * expires_at は時刻付き（timestamptz）なので、そのまま引き算すると
+ * 「23時間差なら0日」のような直感に反する結果になる。暦日に丸めてから
+ * 比較することで、「本日中」「あと1日」が見た目どおりになる。
+ * JST は UTC+9 固定（夏時間なし）。
  */
-function targetDayRangeUtc(): { start: Date; end: Date } {
-  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-  const DAY_MS = 24 * 60 * 60 * 1000;
-
-  // 「いまの JST の日付」を取り出す。9時間ずらした時刻の UTC 表記を読めばよい。
-  const nowJst = new Date(Date.now() + JST_OFFSET_MS);
-  const y = nowJst.getUTCFullYear();
-  const m = nowJst.getUTCMonth();
-  const d = nowJst.getUTCDate();
-
-  // 対象日の JST 00:00 を UTC に直す（月跨ぎ・年跨ぎは Date.UTC が吸収する）
-  const startMs = Date.UTC(y, m, d + DAYS_BEFORE, 0, 0, 0, 0) - JST_OFFSET_MS;
-  return { start: new Date(startMs), end: new Date(startMs + DAY_MS) };
+function jstDayStartUtcMs(ms: number): number {
+  const jst = new Date(ms + JST_OFFSET_MS);
+  return (
+    Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()) -
+    JST_OFFSET_MS
+  );
 }
 
 /** 通知のタイトルと本文を組み立てる */
-function buildMessage(notes: NoteRow[]): { title: string; body: string; url: string } {
-  const titles = notes.map((n) => displayTitle(n.title, n.body));
+function buildMessage(notes: NoteForNotify[]): {
+  title: string;
+  body: string;
+  url: string;
+} {
+  // 期限が近い順に並べてから「本日中」と「2日以内」に振り分ける。
+  // 期限を過ぎたまま残っているメモ（自動削除バッチ前など）は
+  // マイナスになりうるので「本日中」に含める。
+  const sorted = [...notes].sort((a, b) => a.daysLeft - b.daysLeft);
+  const today = sorted.filter((n) => n.daysLeft <= 0);
+  const soon = sorted.filter((n) => n.daysLeft >= 1);
 
-  // 1件だけの日は、そのメモの名前を出してタップで直接開けるようにする
-  if (notes.length === 1) {
-    return {
-      title: `「${titles[0]}」があと${DAYS_BEFORE}日でゴミ箱に移動します`,
-      body: "",
-      url: `/note/${notes[0].id}`,
-    };
-  }
+  const line = (label: string, list: NoteForNotify[]) => {
+    const shown = list
+      .slice(0, MAX_TITLES)
+      .map((n) => n.name)
+      .join(" / ");
+    const rest = list.length - MAX_TITLES;
+    return `${label} ${list.length}件：${shown}${rest > 0 ? ` ほか${rest}件` : ""}`;
+  };
 
-  // 複数件はまとめて1通。本文にタイトルを並べ、多すぎる分は件数で省略する。
-  const shown = titles.slice(0, MAX_TITLES).join(" / ");
-  const rest = titles.length - MAX_TITLES;
+  const lines: string[] = [];
+  if (today.length > 0) lines.push(line("本日中", today));
+  if (soon.length > 0) lines.push(line(`${WITHIN_DAYS}日以内`, soon));
+
   return {
-    title: `${notes.length}件の短期メモが${DAYS_BEFORE}日後にゴミ箱へ移動します`,
-    body: rest > 0 ? `${shown} … ほか${rest}件` : shown,
-    url: "/?view=short",
+    title: `${WITHIN_DAYS}日以内に消去予定のメモがあります【${notes.length}件】`,
+    body: lines.join("\n"),
+    // 1件だけならそのメモを直接開く。複数なら短期メモ一覧へ。
+    url: sorted.length === 1 ? `/note/${sorted[0].id}` : "/?view=short",
   };
 }
 
@@ -105,15 +122,22 @@ export async function GET(request: Request) {
     auth: { persistSession: false },
   });
 
-  // --- 1) 対象のメモを集める ---
-  const { start, end } = targetDayRangeUtc();
+  // --- 1) 期限まで WITHIN_DAYS 日以内のメモを集める ---
+  //
+  // 「ちょうど2日前」ではなく「2日以内」で拾う。日次実行なので一点狙いだと、
+  // 保存日数を短く設定したメモ（1日など）がその瞬間を飛び越えてしまい、
+  // 一度も通知されないため。過去に通知済みでも、条件を満たす限り毎日通知する。
+  const todayStartMs = jstDayStartUtcMs(Date.now());
+  // JST の (今日 + WITHIN_DAYS) 日の翌日 00:00 まで＝暦日で「今日+2」以下
+  const windowEndMs = todayStartMs + (WITHIN_DAYS + 1) * DAY_MS;
+
   const { data: notes, error: notesError } = await supabase
     .from("notes")
-    .select("id, user_id, title, body")
+    .select("id, user_id, title, body, expires_at")
     .eq("type", "short")
     .eq("status", "active")
-    .gte("expires_at", start.toISOString())
-    .lt("expires_at", end.toISOString());
+    .not("expires_at", "is", null)
+    .lt("expires_at", new Date(windowEndMs).toISOString());
 
   if (notesError) {
     return NextResponse.json(
@@ -125,35 +149,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, targets: 0, sent: 0 });
   }
 
-  // --- 2) 送信済みを除く ---
-  const { data: sentRows, error: sentError } = await supabase
-    .from("push_notifications_sent")
-    .select("note_id")
-    .eq("kind", KIND)
-    .in(
-      "note_id",
-      notes.map((n) => n.id),
+  // --- 2) ユーザーごとにまとめる（1ユーザー1通） ---
+  const byUser = new Map<string, NoteForNotify[]>();
+  for (const row of notes as NoteRow[]) {
+    const daysLeft = Math.round(
+      (jstDayStartUtcMs(Date.parse(row.expires_at)) - todayStartMs) / DAY_MS,
     );
-
-  if (sentError) {
-    return NextResponse.json(
-      { error: `送信履歴の取得に失敗: ${sentError.message}` },
-      { status: 500 },
-    );
-  }
-
-  const alreadySent = new Set((sentRows ?? []).map((r) => r.note_id as string));
-  const pending = (notes as NoteRow[]).filter((n) => !alreadySent.has(n.id));
-  if (pending.length === 0) {
-    return NextResponse.json({ ok: true, targets: notes.length, sent: 0 });
-  }
-
-  // --- 3) ユーザーごとにまとめる（1ユーザー1通） ---
-  const byUser = new Map<string, NoteRow[]>();
-  for (const n of pending) {
-    const list = byUser.get(n.user_id);
-    if (list) list.push(n);
-    else byUser.set(n.user_id, [n]);
+    const item: NoteForNotify = {
+      id: row.id,
+      // 一覧の表示と文言を揃える（タイトル未入力なら本文1行目 or「無題のメモ」）
+      name: displayTitle(row.title, row.body),
+      daysLeft,
+    };
+    const list = byUser.get(row.user_id);
+    if (list) list.push(item);
+    else byUser.set(row.user_id, [item]);
   }
 
   const { data: subs, error: subsError } = await supabase
@@ -176,17 +186,15 @@ export async function GET(request: Request) {
     else subsByUser.set(row.user_id, [row]);
   }
 
-  // --- 4) 配信 ---
+  // --- 3) 配信 ---
   let sentCount = 0;
   const notifiedNoteIds: string[] = [];
   const deadEndpoints: string[] = [];
 
   // tsconfig の target が ES5 のため Map を直接 for...of できない。
-  // Array.from で配列に直してから回す（keys() 側と同じ書き方）。
   for (const [userId, userNotes] of Array.from(byUser.entries())) {
     const userSubs = subsByUser.get(userId);
-    // 通知をONにしていないユーザーは宛先が無い。ここで記録も残さないので、
-    // 後から通知をONにすれば次回以降のメモから届くようになる。
+    // 通知をONにしていないユーザーは宛先が無い
     if (!userSubs || userSubs.length === 0) continue;
 
     const payload = JSON.stringify({ ...buildMessage(userNotes), tag: KIND });
@@ -215,21 +223,25 @@ export async function GET(request: Request) {
       }
     }
 
-    // 1台も届かなかったユーザーは記録を残さない（次回の実行で再挑戦する）
     if (deliveredToAny) {
       notifiedNoteIds.push(...userNotes.map((n) => n.id));
     }
   }
 
-  // --- 5) 後始末：送信済みの記録と、無効になった宛先の削除 ---
+  // --- 4) 後始末 ---
+  // push_notifications_sent は「最後にいつ通知したか」の記録（ログ）。
+  // 以前は二重送信を防ぐ抑制リストとして使っていたが、2日以内なら毎日
+  // 通知する方針にしたため、いまは配信の判定には使っていない。
+  // 動作確認（バッチが走ったか）のために残している。
   if (notifiedNoteIds.length > 0) {
+    const now = new Date().toISOString();
     const { error } = await supabase
       .from("push_notifications_sent")
       .upsert(
-        notifiedNoteIds.map((note_id) => ({ note_id, kind: KIND })),
+        notifiedNoteIds.map((note_id) => ({ note_id, kind: KIND, sent_at: now })),
         { onConflict: "note_id,kind" },
       );
-    if (error) console.error("送信履歴の記録に失敗:", error.message);
+    if (error) console.error("送信ログの記録に失敗:", error.message);
   }
 
   if (deadEndpoints.length > 0) {
