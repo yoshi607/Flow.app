@@ -87,16 +87,29 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   // 画面左端からのドラッグとみなす幅
   const EDGE_PX = 28;
 
-  // プッシュ通知から開かれたときの初期表示（例: /?view=short）。
-  // まとめ通知のタップ先が「短期メモ一覧」だが、View は URL と同期していない
+  // 外から開かれたときの初期表示。View も選択中のメモも URL と同期していない
   // ローカル state なので、入口としてここで一度だけ反映する。
+  //
+  //   ?view=short … まとめ通知のタップ先（短期メモ一覧）
+  //   ?note=<id>  … 単体メモ画面（/note/<id>）の閉じるボタンからの戻り先
+  //
   // 反映後はパラメータを消し、以降のフォルダ切替やリロードの邪魔をしない。
-  // ※ paint 前に走るので、すべてのメモ→短期メモの切り替わりは見えない。
+  // ※ paint 前に走るので、切り替わる様子は見えない。
   useIsoLayoutEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("view") !== "short") return;
-    setView({ type: "short" });
+    const viewParam = params.get("view");
+    const noteParam = params.get("note");
+    if (!viewParam && !noteParam) return;
+
+    if (viewParam === "short") setView({ type: "short" });
+
+    // メモを開いたままにするのは md 以上（iPad / PC）だけ。3分割のうち
+    // 右端に本文が出る。スマホは本文を開くと一覧が隠れてしまうため、
+    // 選択せずメモ一覧に戻す。
+    if (noteParam && !isMobile()) setSelectedId(noteParam);
+
     params.delete("view");
+    params.delete("note");
     const rest = params.toString();
     window.history.replaceState(
       null,
