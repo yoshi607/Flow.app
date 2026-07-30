@@ -437,13 +437,12 @@ export default function SettingsDialog({
             {daysError && <p className="mt-1 text-xs text-red-600">{daysError}</p>}
           </div>
 
-          {/* プッシュ通知。短期メモが期限の2日前になった日の朝9時に、
-              その日ぶんをまとめて1通だけ届ける。 */}
+          {/* プッシュ通知。期限まで2日以内の短期メモを、毎朝9時にまとめて1通。 */}
           <div className="rounded-lg border border-neutral-200 p-3">
             <div className="font-medium">期限が近いメモの通知</div>
             <p className="mt-0.5 text-xs text-neutral-400">
-              短期メモがゴミ箱へ移動する2日前の朝9時に、その日ぶんをまとめて
-              1回だけお知らせします。
+              ゴミ箱へ移動するまで2日以内の短期メモを、毎朝9時にまとめて
+              1通お知らせします。
             </p>
 
             {!isPushSupported() ? (
