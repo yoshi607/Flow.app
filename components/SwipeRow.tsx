@@ -97,18 +97,6 @@ const WHEEL_VELOCITY_GRACE_MS = 400;
 // 高いほど指に張り付き、離した時点で content が finger 位置にほぼ乗っているため、
 // バネへ渡す位置・速度が finger の意図どおりになる。0.8 で遅れはごく僅か。
 const WHEEL_SMOOTHING = 0.8;
-// トラックパッドのとき、ボタンが出そろった位置より先へ引ける量(px)。
-//
-// タッチには「指を離した」瞬間（touchend）があるので、そこで即スナップできる。
-// トラックパッドにはそれが無く、しかも Windows の精密タッチパッドは指を離した
-// 後も慣性ぶんのスクロールイベントを数百 ms〜1 秒ほど送り続ける。その間ずっと
-// 「まだ引かれている」ことになるため、上限を設けないとボタンが行の幅いっぱいまで
-// 伸び切ったまま、慣性が終わるのを待ってからようやく戻る（＝伸びきって戻りが遅い）。
-// そこでトラックパッドのときだけ、ボタンが出そろった位置のすぐ先に壁を作る。
-// これで見た目はタッチ（iPad）と同じ「ボタンが出て止まる」になる。
-const WHEEL_MAX_OVER = 16;
-// 振り切り確定後に慣性ぶんの入力を捨て続ける上限(ms)。慣性はこれより早く止まる。
-const WHEEL_LOCK_MAX_MS = 1000;
 
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
@@ -198,10 +186,6 @@ export default function SwipeRow({
   const wheelEngagedRef = useRef(false);
   // 最後に wheel が届いた時刻。速度をどれだけ信用するかの判断に使う。
   const wheelLastEventTRef = useRef(0);
-  // 振り切りを確定させた直後、慣性で届き続けるイベントを受け付けないための鍵。
-  // 入力が途切れる（WHEEL_IDLE_MS）まで掛かったままにする。
-  const wheelLockedRef = useRef(false);
-  const wheelLockStartRef = useRef(0);
   // 追従ループから「操作終了→スナップ」を呼ぶための控え（定義は後段）。
   const endWheelGestureRef = useRef<() => void>(() => {});
   const wheelBaseRef = useRef(0); // wheel ジェスチャー開始時の位置（反対側へ越えさせない判定用）
@@ -307,15 +291,6 @@ export default function SwipeRow({
     rowRef.current?.classList.toggle("flow-swipe-active", on);
   }, []);
 
-  // 「入力が途切れたら鍵を外す」タイマーを掛け直す。慣性が届き続ける間は
-  // 掛かったまま、途切れたら自動で外れる（掛けっぱなしにならないための要）。
-  const armWheelUnlock = useCallback(() => {
-    if (wheelTimer.current) clearTimeout(wheelTimer.current);
-    wheelTimer.current = setTimeout(() => {
-      wheelLockedRef.current = false;
-    }, WHEEL_IDLE_MS);
-  }, []);
-
   const cancelRaf = useCallback(() => {
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
@@ -324,10 +299,21 @@ export default function SwipeRow({
   }, []);
 
   // 「指/トラックパッドが示した生の位置」に壁と抵抗を適用して実際の位置を出す。
-  // touch と wheel で必ず同じ規則になるよう共通化する。入力は常に生の値を渡すこと
-  // （抵抗を掛けた後の値を再入力すると、抵抗が重ねがけになって動きが詰まる）。
-  // wheel=true はトラックパッド。慣性で引かれ続けるぶんを止めるため、
-  // アクションが出そろった位置のすぐ先（WHEEL_MAX_OVER）で止める。
+  // 入力は常に生の値を渡すこと（抵抗を掛けた後の値を再入力すると、抵抗が
+  // 重ねがけになって動きが詰まる）。
+  //
+  // wheel=true はトラックパッド。ここだけタッチと規則を変えて、
+  //   ・ボタンが出そろった位置（左）／ピン留めボタンの幅（右）を「硬い壁」にする
+  //   ・壁の先へは 1px も進ませない（ラバーバンドも掛けない）
+  // としている。理由は2つ。
+  //   1. Windows の精密タッチパッドは指を離した後も慣性ぶんのスクロールを
+  //      数百ms〜1秒送り続ける。タッチのように「離した瞬間」が無いので、
+  //      壁が無いとボタンが行幅いっぱいまで伸び切ったまま、慣性が終わるまで
+  //      戻らない。
+  //   2. 壁の先へ進める（＝生の積算値だけが遠くへ行く）と、逆向きに動かし
+  //      始めても「行き過ぎたぶんを戻しきるまで反応しない」空振り区間ができる。
+  //      硬い壁にして、生の積算値も壁で止める（呼び出し側で書き戻す）ことで、
+  //      折り返した瞬間から素直に反応する。
   const clampPosition = useCallback(
     (raw: number, base: number, wheel = false) => {
       let next = raw;
@@ -338,25 +324,25 @@ export default function SwipeRow({
       if (base < 0 && next > 0) next = 0;
       if (base > 0 && next < 0) next = 0;
       if (leadingActionRef.current) {
-        // ピン留めがある行：行幅までは指と同じ速さで動かし、そこで止める。
-        if (next > rowW) next = rowW;
+        // ピン留めがある行：タッチは行幅まで引ける（振り切ってピン留め）。
+        // トラックパッドはボタンが出た幅で止める（振り切りは使わず、出てきた
+        // ボタンを押してもらう。慣性で勝手に振り切ってしまうのを防ぐ）。
+        const leadMax = wheel ? Math.min(rowW, leadWidth) : rowW;
+        if (next > leadMax) next = leadMax;
       } else if (next > 0) {
         // 出すものが無い方向。動かないことを伝えるため抵抗だけ残す。
-        next = rubberBand(next, screenW);
+        next = wheel ? 0 : rubberBand(next, screenW);
       }
-      // アクション側は、ボタンが出そろった後も指と同じ速さで動き続ける。
+      // アクション側は、タッチではボタンが出そろった後も指と同じ速さで動き続ける。
       // ここに壁を置くと（減速でも停止でも）ボタンが出た瞬間に引っかかって見える。
       // アクション領域が一緒に広がるので隙間はできない。抵抗は行幅を超えてから。
-      // ただしトラックパッドだけは、出そろった位置のすぐ先を壁にする（上の
-      // WHEEL_MAX_OVER の説明を参照）。
       const maxLeft = wheel ? openWidth : Math.max(openWidth, rowW);
       if (next < -maxLeft) {
-        const over = rubberBand(-next - maxLeft, screenW);
-        next = -(maxLeft + (wheel ? Math.min(WHEEL_MAX_OVER, over) : over));
+        next = wheel ? -maxLeft : -(maxLeft + rubberBand(-next - maxLeft, screenW));
       }
       return next;
     },
-    [openWidth],
+    [openWidth, leadWidth],
   );
 
   // ドラッグ中の 1:1 追従。イベント内でそのまま transform を書く（rAF を挟むと
@@ -395,17 +381,6 @@ export default function SwipeRow({
       let x = offsetRef.current + (target - offsetRef.current) * alpha;
       if (Math.abs(target - x) < 0.1) x = target;
       moveTo(x);
-      // 振り切り（ピン留め確定）はその場で実行して終わりにする。トラックパッドには
-      // 「離した」瞬間が無いので、ここで待つと慣性が止まるまで振り切ったまま
-      // 止まって見える。確定した以上は待つ理由がないので、すぐ戻し始める。
-      // 直後に届く慣性ぶんのイベントで二重に確定しないよう、鍵を掛けておく。
-      if (committingRef.current) {
-        wheelLockedRef.current = true;
-        wheelLockStartRef.current = now;
-        endWheelGestureRef.current();
-        armWheelUnlock();
-        return;
-      }
       // 操作終了の判定はここで行う（固定時間のタイマーを待たない）。最後の入力から
       // 一定の間が空いたら、目標へ追いつくのを待たず、その瞬間の位置・速度のまま
       // バネへ渡す。「追いつかせて一度止める → 待つ → 再加速」の速度の谷を無くし、
@@ -419,7 +394,7 @@ export default function SwipeRow({
       rafRef.current = draggingRef.current ? requestAnimationFrame(step) : null;
     };
     rafRef.current = requestAnimationFrame(step);
-  }, [moveTo, armWheelUnlock]);
+  }, [moveTo]);
 
   const springToRef = useRef<(target: number, v0?: number) => void>(() => {});
   const closeSelf = useCallback(() => {
@@ -606,18 +581,6 @@ export default function SwipeRow({
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * WHEEL_AXIS_RATIO) return;
       e.preventDefault();
 
-      // 振り切り確定の直後。慣性ぶんのイベントは捨て、途切れたら鍵を外す。
-      // 慣性は長くても 1 秒ほどで止まるので、それを超えて届き続けるなら
-      // 新しい操作とみなして受け付ける（鍵が掛かったままにならないための保険）。
-      if (wheelLockedRef.current) {
-        if (performance.now() - wheelLockStartRef.current < WHEEL_LOCK_MAX_MS) {
-          wheelLastEventTRef.current = performance.now();
-          armWheelUnlock();
-          return;
-        }
-        wheelLockedRef.current = false;
-      }
-
       wheelAccum.current += e.deltaX;
       // 一度始まったジェスチャーは、途切れる（idle）まで始まったままにする。
       // 位置で判定すると、clampPosition が位置をちょうど 0 に張り付かせた瞬間に
@@ -650,6 +613,12 @@ export default function SwipeRow({
         //   進まない＝カクついて見える）
         wheelRawRef.current -= e.deltaX * WHEEL_SENSITIVITY;
         const next = clampPosition(wheelRawRef.current, wheelBaseRef.current, true);
+        // 壁に当たったら生の積算値も壁で止める。止めないと、指を離した後の慣性
+        // ぶんだけ積算値が壁の遠く先まで進んでしまい、逆向きに動かし始めても
+        // 「行き過ぎたぶんを戻しきるまで何も動かない」空振り区間ができる
+        // （＝スワイプしても反応しない）。トラックパッドの壁はラバーバンドを
+        // 掛けない硬い壁なので、書き戻しても抵抗の重ねがけは起きない。
+        wheelRawRef.current = next;
         wheelTargetRef.current = next;
         pushSample(next); // touch と同じ方式で速度を計測（フリック判定用）
       }
@@ -678,7 +647,6 @@ export default function SwipeRow({
     startWheelLoop,
     pushSample,
     resetSamples,
-    armWheelUnlock,
   ]);
 
   if (!isTouch || disabled || (actions.length === 0 && !leadingAction)) {
