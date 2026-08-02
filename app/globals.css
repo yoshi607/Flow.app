@@ -89,6 +89,39 @@ body {
 .ProseMirror hr.ProseMirror-selectednode {
   border-top-color: rgb(0 0 0 / 0.38);
 }
+/* ===== 箇条書き（行頭で「- 」と入力するとリストになる） =====
+   行頭の印は「・」。list-style-type に文字列を指定する書き方は Safari の
+   対応が新しく、古い iOS では印が消えてしまうので、印は擬似要素で自前に描く。
+   li に左パディングを持たせ、印だけを絶対配置で左端に置くので、
+   1行に収まらず折り返しても 2行目以降が印の下に潜り込まない。 */
+.ProseMirror ul {
+  margin: 0 0 0.5em;
+  padding-left: 0;
+  list-style: none;
+}
+.ProseMirror ul li {
+  position: relative;
+  padding-left: 1.4em;
+}
+.ProseMirror ul li::before {
+  content: "・";
+  position: absolute;
+  left: 0;
+  top: 0;
+  @apply text-neutral-500;
+}
+/* li の中は段落（<p>）なので、行間が空きすぎないよう下余白を詰める */
+.ProseMirror ul li > p {
+  margin-bottom: 0.15em;
+}
+/* 入れ子のリストは、親の li のパディングぶんだけ自然に字下がりする */
+.ProseMirror ul ul {
+  margin: 0.15em 0 0;
+}
+/* 空の項目にまで「ここにメモを入力…」を出すとうるさいので、リスト内は出さない */
+.ProseMirror li p.is-empty::before {
+  content: none;
+}
 /* ===== 音声メモのコールアウト（文字起こしブロック） ===== */
 .ProseMirror div[data-type="transcript"] {
   @apply my-3 rounded-md border border-brand-200 bg-brand-50 px-3 py-3;
@@ -509,7 +542,9 @@ body {
      継ぎ目なく引き継ぐため、ここは必ずスプラッシュ背景色と一致させる。 */
   background: #dceef8;
   opacity: 1;
-  transition: opacity 0.5s ease;
+  /* 溶暗の長さ。SplashIntro の FADE_MS と必ず一致させること
+     （ここだけ変えると、消え終わる前に DOM から外れて画面がちらつく）。 */
+  transition: opacity 0.33s ease;
 }
 
 /* 描き終えて静止したあと、溶暗して退場 */
@@ -542,12 +577,13 @@ body {
 
 /* 計測が済んで描画フェーズに入ったら再生開始（マウント時の 1 回だけ）。 */
 [data-phase="drawing"] .flow-arrow-line {
-  /* ease-out：描き終わり際になめらかに減速する（元 1s から計 1.44 倍速） */
-  animation: flow-arrow-draw 0.69s ease-out forwards;
+  /* ease-out：描き終わり際になめらかに減速する（元 1s → 1.44 倍速 → さらに
+     1.5 倍速で 0.46s。導入全体（描く→静止→溶暗）を同じ 1.5 倍で詰めている） */
+  animation: flow-arrow-draw 0.46s ease-out forwards;
 }
 [data-phase="drawing"] .flow-arrow-head {
-  /* 線が先端へ届く頃（0.54s）に、わずかに弾んで現れる（計 1.44 倍速） */
-  animation: flow-arrow-head-in 0.23s cubic-bezier(0.34, 1.56, 0.64, 1) 0.54s both;
+  /* 線が先端へ届く頃（0.36s）に、わずかに弾んで現れる */
+  animation: flow-arrow-head-in 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) 0.36s both;
 }
 
 /* 完了後は完全に描かれた状態で静止。ここでインラインに固定するので、

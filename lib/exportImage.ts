@@ -55,6 +55,8 @@ type Block =
       lineHeight: number;
       marginTop: number;
       marginBottom: number;
+      /** 箇条書きの項目。行頭に「・」を描き、本文はその右へ字下げする */
+      bullet?: boolean;
       lines?: Line[];
       height?: number;
     }
@@ -112,6 +114,9 @@ function segsOf(node: PMNode, size: number, baseWeight: number): Seg[] {
 
 const HEADING = { 1: 28, 2: 24, 3: 20 } as const;
 
+/** 箇条書きの「・」ぶんの字下がり幅(px)。折り返した2行目以降もここに揃える */
+const BULLET_INDENT = 24;
+
 async function collectBlocks(parent: PMNode): Promise<Block[]> {
   const blocks: Block[] = [];
 
@@ -150,6 +155,24 @@ async function collectBlocks(parent: PMNode): Promise<Block[]> {
       const refW = Number(node.attrs.w) || CONTENT;
       const refH = Number(node.attrs.h) || 220;
       blocks.push({ kind: "sketch", strokes, refW, refH, marginTop: 6, marginBottom: 12 });
+    } else if (name === "bulletList") {
+      // 箇条書き。項目（listItem）の中身は段落なので、その中身をそのまま
+      // 集めたうえで、項目の先頭ブロックだけ「・」付き（＝字下げ）にする。
+      for (let j = 0; j < node.childCount; j++) {
+        const inner = await collectBlocks(node.child(j));
+        let first = true;
+        for (const b of inner) {
+          if (b.kind === "text") {
+            // 項目どうしの間隔は、段落より詰める（画面表示に合わせる）
+            b.marginBottom = 3;
+            if (first) {
+              b.bullet = true;
+              first = false;
+            }
+          }
+          blocks.push(b);
+        }
+      }
     } else if (name === "transcriptCallout") {
       blocks.push({
         kind: "callout",
@@ -262,7 +285,8 @@ function measureBlocks(
 
   for (const b of blocks) {
     if (b.kind === "text") {
-      b.lines = layoutSegs(ctx, b.segs, width);
+      // 箇条書きは「・」のぶんだけ折り返し幅を狭める（右端が揃う）
+      b.lines = layoutSegs(ctx, b.segs, width - (b.bullet ? BULLET_INDENT : 0));
       b.height = Math.max(1, b.lines.length) * b.lineHeight;
     } else if (b.kind === "image") {
       const scale = Math.min(1, width / (b.img.naturalWidth || width));
@@ -312,12 +336,19 @@ function drawBlocks(
 
     if (b.kind === "text") {
       ctx.textBaseline = "alphabetic";
+      const indent = b.bullet ? BULLET_INDENT : 0;
+      if (b.bullet) {
+        // 行頭の「・」。1行目のベースラインに合わせて左端に置く
+        ctx.font = b.segs[0]?.font ?? fontOf(17);
+        ctx.fillStyle = "#737373"; // neutral-500（画面表示と同じ）
+        ctx.fillText("・", x, y + b.lineHeight * 0.74);
+      }
       for (const line of b.lines ?? []) {
         for (const p of line) {
           ctx.font = p.font;
           ctx.fillStyle = p.color;
           // 行の下寄せ位置（ざっくり行高の 3/4 をベースラインにする）
-          ctx.fillText(p.text, x + p.x, y + b.lineHeight * 0.74);
+          ctx.fillText(p.text, x + indent + p.x, y + b.lineHeight * 0.74);
         }
         y += b.lineHeight;
       }

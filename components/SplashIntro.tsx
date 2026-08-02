@@ -11,10 +11,13 @@
 import { useEffect, useRef, useState } from "react";
 import LogoArrowDraw from "./LogoArrowDraw";
 
+// 導入の各時間は「線描き（globals.css）→ 静止 → 溶暗」で一続きの演出なので、
+// 速さを変えるときは 3 つとも同じ倍率で詰めること（ここだけ変えると、線を
+// 描き終えてから消えるまでの間が不自然に空く／詰まる）。現在は 1.5 倍速。
 /** 描き終えてから静止させておく時間 */
-const HOLD_MS = 420;
-/** 溶暗にかける時間（CSS の transition と合わせる） */
-const FADE_MS = 500;
+const HOLD_MS = 280;
+/** 溶暗にかける時間（CSS の .flow-intro の transition と合わせる） */
+const FADE_MS = 330;
 
 export default function SplashIntro() {
   const [leaving, setLeaving] = useState(false);

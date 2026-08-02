@@ -203,11 +203,21 @@ export default function NoteEditor({
         code: false,
         codeBlock: false,
         blockquote: false,
-        // 有効。行頭で --- と入力すると区切り線になる（StarterKit の入力ルール）。
-        bulletList: false,
+        // 区切り線は有効。行頭で --- と入力すると入る（StarterKit の入力ルール）。
+        //
+        // 箇条書きも有効。行頭で「- 」（ハイフン＋スペース）と入力するとリストに
+        // なる（StarterKit の入力ルール。* + でも同じ）。Enter で次の項目、
+        // 空の項目で Enter を押すとリストから抜ける。行頭の印は globals.css の
+        // .ProseMirror ul li::before で「・」にしている。
+        // ※ --- の区切り線とは競合しない：--- は3つ目のハイフンの後にスペースが
+        //   来るまで確定しないので、その前に「- 」のルールが走ることはない。
+        bulletList: {},
+        listItem: {},
+        // 番号付きリストは使わない（箇条書きだけにする）
         orderedList: false,
-        listItem: false,
-        listKeymap: false,
+        // Backspace / Delete でリストの項目をきれいに繋げるためのキー操作。
+        // 番号付きリストが無くても安全に動く（登録されていないリストは読み飛ばす）。
+        listKeymap: {},
       }),
       TranscriptCallout,
       // 描画中は editor.setEditable(false) でエディタごと編集不可にするため、
