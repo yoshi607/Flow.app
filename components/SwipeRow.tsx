@@ -98,6 +98,49 @@ const WHEEL_VELOCITY_GRACE_MS = 400;
 // バネへ渡す位置・速度が finger の意図どおりになる。0.8 で遅れはごく僅か。
 const WHEEL_SMOOTHING = 0.8;
 
+// --- トラックパッドで「指が離れた瞬間」を見つける（touchend の代わり） ---
+//
+// タッチには指を離した瞬間（touchend）があり、そこで即スナップできる。wheel には
+// それが無いうえ、Windows の精密タッチパッドは指を離した後も OS/ブラウザが
+// 慣性ぶんのスクロールを自動で作って送り続ける。そのため「入力が途切れたら終わり」
+// という判定では、慣性が止まるまで（数百 ms〜1 秒）ずっと引かれ続けてしまう。
+//
+// ただし慣性には見分けがつく特徴がある：向きが変わらず、1 イベントごとに
+// ほぼ一定の割合で小さくなっていく（人の指ではまず作れない規則正しさ）。
+// これを見つけた時点を「指が離れた」とみなし、タッチの touchend とまったく同じ
+// 処理（その時の速度を引き継いでスナップ）へ入る。以降の慣性は捨てる。
+// 判定が外れて実は指が動いていた場合は、規則正しさが崩れた次のイベントで
+// すぐ操作へ戻る（下の wheelFlingRef の扱いを参照）。
+const FLING_WINDOW = 5; // 判定に使う直近イベント数（比は 4 個ぶん）
+const FLING_RATIO_MIN = 0.7; // 1 イベントで小さくなる割合の下限
+// 上限は 1.0 未満にすること。1.0 を許すと「一定の速さで動かし続けている指」
+// （毎回まったく同じ量＝比が 1.0 で並ぶ）まで慣性と見なしてしまい、
+// スワイプの途中で勝手にスナップしてしまう。必ず「減っている」ことを求める。
+const FLING_RATIO_MAX = 0.98;
+const FLING_RATIO_SPREAD = 0.15; // 減り方のばらつき許容（人の指はもっとばらつく）
+const FLING_MIN_DELTA = 2; // 小さすぎる値は比が暴れるので判定に使わない
+
+/** 直近の deltaX の並びが「慣性（指を離した後の惰性）」に見えるか */
+function looksLikeFling(deltas: number[]): boolean {
+  if (deltas.length < FLING_WINDOW) return false;
+  const d = deltas.slice(-FLING_WINDOW);
+  const sign = Math.sign(d[0]);
+  if (sign === 0) return false;
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 1; i < d.length; i++) {
+    if (Math.sign(d[i]) !== sign) return false; // 向きが変わった＝指が動いている
+    const prev = Math.abs(d[i - 1]);
+    const cur = Math.abs(d[i]);
+    if (prev < FLING_MIN_DELTA || cur < FLING_MIN_DELTA) return false;
+    const ratio = cur / prev;
+    if (ratio < FLING_RATIO_MIN || ratio > FLING_RATIO_MAX) return false;
+    if (ratio < min) min = ratio;
+    if (ratio > max) max = ratio;
+  }
+  return max - min <= FLING_RATIO_SPREAD;
+}
+
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
 const openRegistry: { close: (() => void) | null } = { close: null };
 
@@ -186,6 +229,10 @@ export default function SwipeRow({
   const wheelEngagedRef = useRef(false);
   // 最後に wheel が届いた時刻。速度をどれだけ信用するかの判断に使う。
   const wheelLastEventTRef = useRef(0);
+  // 直近の deltaX の並び。「指を離した後の慣性」かどうかの見分けに使う。
+  const wheelDeltasRef = useRef<number[]>([]);
+  // 慣性とみなして入力を捨てている最中か（＝指はもう離れている、という想定）。
+  const wheelFlingRef = useRef(false);
   // 追従ループから「操作終了→スナップ」を呼ぶための控え（定義は後段）。
   const endWheelGestureRef = useRef<() => void>(() => {});
   const wheelBaseRef = useRef(0); // wheel ジェスチャー開始時の位置（反対側へ越えさせない判定用）
@@ -291,6 +338,16 @@ export default function SwipeRow({
     rowRef.current?.classList.toggle("flow-swipe-active", on);
   }, []);
 
+  // 入力が完全に途切れたときの後始末（保険）。慣性の見分けもここで初期化する。
+  const armWheelIdle = useCallback(() => {
+    if (wheelTimer.current) clearTimeout(wheelTimer.current);
+    wheelTimer.current = setTimeout(() => {
+      wheelFlingRef.current = false;
+      wheelDeltasRef.current = [];
+      endWheelGestureRef.current();
+    }, WHEEL_IDLE_MS);
+  }, []);
+
   const cancelRaf = useCallback(() => {
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
@@ -299,23 +356,12 @@ export default function SwipeRow({
   }, []);
 
   // 「指/トラックパッドが示した生の位置」に壁と抵抗を適用して実際の位置を出す。
+  // touch と wheel で必ず同じ規則になるよう共通化する（トラックパッドでも
+  // iPad と同じ動き・同じ手応えにするため、ここに端末ごとの分岐は置かない）。
   // 入力は常に生の値を渡すこと（抵抗を掛けた後の値を再入力すると、抵抗が
   // 重ねがけになって動きが詰まる）。
-  //
-  // wheel=true はトラックパッド。ここだけタッチと規則を変えて、
-  //   ・ボタンが出そろった位置（左）／ピン留めボタンの幅（右）を「硬い壁」にする
-  //   ・壁の先へは 1px も進ませない（ラバーバンドも掛けない）
-  // としている。理由は2つ。
-  //   1. Windows の精密タッチパッドは指を離した後も慣性ぶんのスクロールを
-  //      数百ms〜1秒送り続ける。タッチのように「離した瞬間」が無いので、
-  //      壁が無いとボタンが行幅いっぱいまで伸び切ったまま、慣性が終わるまで
-  //      戻らない。
-  //   2. 壁の先へ進める（＝生の積算値だけが遠くへ行く）と、逆向きに動かし
-  //      始めても「行き過ぎたぶんを戻しきるまで反応しない」空振り区間ができる。
-  //      硬い壁にして、生の積算値も壁で止める（呼び出し側で書き戻す）ことで、
-  //      折り返した瞬間から素直に反応する。
   const clampPosition = useCallback(
-    (raw: number, base: number, wheel = false) => {
+    (raw: number, base: number) => {
       let next = raw;
       const rowW = rowWidthRef.current;
       const screenW = screenWidthRef.current;
@@ -324,26 +370,41 @@ export default function SwipeRow({
       if (base < 0 && next > 0) next = 0;
       if (base > 0 && next < 0) next = 0;
       if (leadingActionRef.current) {
-        // ピン留めがある行：タッチは行幅まで引ける（振り切ってピン留め）。
-        // トラックパッドはボタンが出た幅で止める（振り切りは使わず、出てきた
-        // ボタンを押してもらう。慣性で勝手に振り切ってしまうのを防ぐ）。
-        const leadMax = wheel ? Math.min(rowW, leadWidth) : rowW;
-        if (next > leadMax) next = leadMax;
+        // ピン留めがある行：行幅までは指と同じ速さで動かし、そこで止める。
+        if (next > rowW) next = rowW;
       } else if (next > 0) {
         // 出すものが無い方向。動かないことを伝えるため抵抗だけ残す。
-        next = wheel ? 0 : rubberBand(next, screenW);
+        next = rubberBand(next, screenW);
       }
-      // アクション側は、タッチではボタンが出そろった後も指と同じ速さで動き続ける。
+      // アクション側は、ボタンが出そろった後も指と同じ速さで動き続ける。
       // ここに壁を置くと（減速でも停止でも）ボタンが出た瞬間に引っかかって見える。
       // アクション領域が一緒に広がるので隙間はできない。抵抗は行幅を超えてから。
-      const maxLeft = wheel ? openWidth : Math.max(openWidth, rowW);
+      const maxLeft = Math.max(openWidth, rowW);
       if (next < -maxLeft) {
-        next = wheel ? -maxLeft : -(maxLeft + rubberBand(-next - maxLeft, screenW));
+        next = -(maxLeft + rubberBand(-next - maxLeft, screenW));
       }
       return next;
     },
-    [openWidth, leadWidth],
+    [openWidth],
   );
+
+  // 生の積算値（wheel 専用）に「硬い壁」だけを適用する。
+  //
+  // タッチは毎回「指の絶対座標」から位置を作り直すので、壁に押し付けたまま
+  // 引き返せば即座に戻る。いっぽう wheel は差分の足し算なので、壁の先へも
+  // 足され続けると、引き返しても「行き過ぎたぶんを戻しきるまで動かない」
+  // 空振り区間ができる。そこで、それ以上動かない場所（硬い壁）まで来たら
+  // 積算値もそこで止める。ラバーバンド（＝じわじわ動く範囲）は引き返せば
+  // すぐ反応するので、タッチと同じ手応えを残すためそのままにする。
+  const clampRawToWalls = useCallback((raw: number, base: number) => {
+    let next = raw;
+    if (base < 0 && next > 0) next = 0;
+    if (base > 0 && next < 0) next = 0;
+    if (leadingActionRef.current && next > rowWidthRef.current) {
+      next = rowWidthRef.current;
+    }
+    return next;
+  }, []);
 
   // ドラッグ中の 1:1 追従。イベント内でそのまま transform を書く（rAF を挟むと
   // 次フレームまで書き込みが遅れて指から離れて見えるため挟まない。ブラウザは
@@ -581,13 +642,36 @@ export default function SwipeRow({
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * WHEEL_AXIS_RATIO) return;
       e.preventDefault();
 
+      const now = performance.now();
+      // 前の入力から間が空いていたら、慣性の見分けは最初からやり直す
+      // （別の操作なので、前の並びを引きずらせない）。
+      if (now - wheelLastEventTRef.current > WHEEL_IDLE_MS) {
+        wheelDeltasRef.current = [];
+        wheelFlingRef.current = false;
+      }
+      wheelLastEventTRef.current = now;
+      wheelDeltasRef.current.push(e.deltaX);
+      if (wheelDeltasRef.current.length > FLING_WINDOW) {
+        wheelDeltasRef.current.shift();
+      }
+
+      // 「指はもう離れている」とみなして慣性を捨てている最中。
+      // 規則正しさが崩れたら＝人が動かしているので、その場で操作へ戻す。
+      if (wheelFlingRef.current) {
+        if (looksLikeFling(wheelDeltasRef.current)) {
+          armWheelIdle();
+          return;
+        }
+        wheelFlingRef.current = false;
+        wheelDeltasRef.current = [e.deltaX]; // 見分けはやり直し
+      }
+
       wheelAccum.current += e.deltaX;
       // 一度始まったジェスチャーは、途切れる（idle）まで始まったままにする。
       // 位置で判定すると、clampPosition が位置をちょうど 0 に張り付かせた瞬間に
       // 抜けてしまい、入力が届いているのに目標が更新されない空白フレームが出る。
       const engaged =
         wheelEngagedRef.current || Math.abs(wheelAccum.current) > WHEEL_START_PX;
-      wheelLastEventTRef.current = performance.now();
 
       if (engaged) {
         beginOpen();
@@ -612,23 +696,32 @@ export default function SwipeRow({
         // （減衰後の位置に足し込むと抵抗が重ねがけになり、スクロールしても
         //   進まない＝カクついて見える）
         wheelRawRef.current -= e.deltaX * WHEEL_SENSITIVITY;
-        const next = clampPosition(wheelRawRef.current, wheelBaseRef.current, true);
-        // 壁に当たったら生の積算値も壁で止める。止めないと、指を離した後の慣性
-        // ぶんだけ積算値が壁の遠く先まで進んでしまい、逆向きに動かし始めても
-        // 「行き過ぎたぶんを戻しきるまで何も動かない」空振り区間ができる
-        // （＝スワイプしても反応しない）。トラックパッドの壁はラバーバンドを
-        // 掛けない硬い壁なので、書き戻しても抵抗の重ねがけは起きない。
-        wheelRawRef.current = next;
+        wheelRawRef.current = clampRawToWalls(
+          wheelRawRef.current,
+          wheelBaseRef.current,
+        );
+        const next = clampPosition(wheelRawRef.current, wheelBaseRef.current);
         wheelTargetRef.current = next;
         pushSample(next); // touch と同じ方式で速度を計測（フリック判定用）
+
+        // ここから慣性＝指が離れた、と見えたら touchend と同じ処理へ。
+        // このイベントぶんまでは反映してから終わる（離す直前の動きを捨てない）。
+        if (looksLikeFling(wheelDeltasRef.current)) {
+          wheelFlingRef.current = true;
+          endWheelGestureRef.current();
+          armWheelIdle();
+          return;
+        }
+      } else if (looksLikeFling(wheelDeltasRef.current)) {
+        // まだ行が動き出していない段階での慣性。指はもう離れているので、
+        // 惰性だけで行が開き始めないように捨てる。
+        wheelFlingRef.current = true;
+        wheelAccum.current = 0;
       }
 
-      // 保険のタイマー。通常は追従ループの追いつき検知が先にスナップを始めるが、
-      // 何らかの理由でループが回っていない場合に備えて残す（同じ終了処理を呼ぶ）。
-      if (wheelTimer.current) clearTimeout(wheelTimer.current);
-      wheelTimer.current = setTimeout(() => {
-        endWheelGestureRef.current();
-      }, WHEEL_IDLE_MS);
+      // 保険のタイマー。通常は慣性の検知か追従ループの追いつき検知が先に
+      // スナップを始めるが、どちらも起きなかった場合に備えて残す。
+      armWheelIdle();
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -647,6 +740,8 @@ export default function SwipeRow({
     startWheelLoop,
     pushSample,
     resetSamples,
+    clampRawToWalls,
+    armWheelIdle,
   ]);
 
   if (!isTouch || disabled || (actions.length === 0 && !leadingAction)) {
