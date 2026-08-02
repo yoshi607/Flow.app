@@ -106,39 +106,41 @@ const WHEEL_SMOOTHING = 0.8;
 // という判定では、慣性が止まるまで（数百 ms〜1 秒）ずっと引かれ続けてしまう。
 //
 // ただし慣性には見分けがつく特徴がある：向きが変わらず、1 イベントごとに
-// ほぼ一定の割合で小さくなっていく（人の指ではまず作れない規則正しさ）。
-// これを見つけた時点を「指が離れた」とみなし、タッチの touchend とまったく同じ
-// 処理（その時の速度を引き継いでスナップ）へ入る。以降の慣性は捨てる。
-// 判定が外れて実は指が動いていた場合は、規則正しさが崩れた次のイベントで
-// すぐ操作へ戻る（下の wheelFlingRef の扱いを参照）。
-const FLING_WINDOW = 5; // 判定に使う直近イベント数（比は 4 個ぶん）
-const FLING_RATIO_MIN = 0.7; // 1 イベントで小さくなる割合の下限
-// 上限は 1.0 未満にすること。1.0 を許すと「一定の速さで動かし続けている指」
-// （毎回まったく同じ量＝比が 1.0 で並ぶ）まで慣性と見なしてしまい、
+// 必ず少しずつ小さくなっていく。人の指は、同じ速さで動かし続けたり、速くしたり、
+// ばらついたりするので、これが何十msも途切れずに続くことはまず無い。
+// 「小さくなり続けている時間」がしきい値を超えた時点を「指が離れた」とみなし、
+// タッチの touchend とまったく同じ処理（その時の速度を引き継いでスナップ）へ
+// 入る。以降の慣性は捨てる。判定が外れて実は指が動いていた場合は、減り方が
+// 崩れた次のイベントですぐ操作へ戻る（下の wheelFlingRef の扱いを参照）。
+//
+// しきい値を短くするほど「指を離してから止まるまで」が短くなるが、短すぎると
+// 指で減速しているだけの場面を離したと誤判定する。60ms は、実測の入力間隔
+// （ペア＋14〜17ms）で 4〜7 イベントぶんにあたる。
+const FLING_DECAY_MS = 60;
+const FLING_MIN_EVENTS = 3; // 時間だけでなくイベント数も要求する（穴の保険）
+// 1 イベントあたりの減り方。上限は 1.0 未満にすること。1.0 を許すと「一定の
+// 速さで動かし続けている指」（毎回まったく同じ量）まで慣性と見なしてしまい、
 // スワイプの途中で勝手にスナップしてしまう。必ず「減っている」ことを求める。
-const FLING_RATIO_MAX = 0.98;
-const FLING_RATIO_SPREAD = 0.15; // 減り方のばらつき許容（人の指はもっとばらつく）
+const FLING_RATIO_MAX = 0.99;
+const FLING_RATIO_MIN = 0.55; // 一気に小さくなるのは指を止めた動き（慣性ではない）
 const FLING_MIN_DELTA = 2; // 小さすぎる値は比が暴れるので判定に使わない
+// 慣性と分かった時点で、指はもう離れている。タッチと違って「離した瞬間の勢いの
+// まま滑る」感じは、指がパッドから離れた後に起きるので気持ちよさに繋がらず、
+// 止まるまでが長いという不満だけが残る。そこでバネへ渡す初速はごくわずかに
+// 留め、離した位置からすっと収まるようにする（開く/戻すの判定には、弱めていない
+// 本来の速度を使うので、フリックの効き方は変わらない）。
+const FLING_VELOCITY_SCALE = 0.15;
+// 慣性を捨てている最中に「人が触った」と判断する増え方。端数の丸めで同じ値が
+// 並んだり、少しだけ増えたりすることがあるので、少し余裕を持たせる。
+const FLING_KEEP_RATIO_MAX = 1.15;
 
-/** 直近の deltaX の並びが「慣性（指を離した後の惰性）」に見えるか */
-function looksLikeFling(deltas: number[]): boolean {
-  if (deltas.length < FLING_WINDOW) return false;
-  const d = deltas.slice(-FLING_WINDOW);
-  const sign = Math.sign(d[0]);
-  if (sign === 0) return false;
-  let min = Infinity;
-  let max = -Infinity;
-  for (let i = 1; i < d.length; i++) {
-    if (Math.sign(d[i]) !== sign) return false; // 向きが変わった＝指が動いている
-    const prev = Math.abs(d[i - 1]);
-    const cur = Math.abs(d[i]);
-    if (prev < FLING_MIN_DELTA || cur < FLING_MIN_DELTA) return false;
-    const ratio = cur / prev;
-    if (ratio < FLING_RATIO_MIN || ratio > FLING_RATIO_MAX) return false;
-    if (ratio < min) min = ratio;
-    if (ratio > max) max = ratio;
-  }
-  return max - min <= FLING_RATIO_SPREAD;
+/** 直前のイベントと比べた減り方（同じ向きで小さくなっていれば比を返す） */
+function deltaRatio(cur: number, prev: number): number | null {
+  if (prev === 0 || Math.sign(cur) !== Math.sign(prev)) return null;
+  const a = Math.abs(prev);
+  const b = Math.abs(cur);
+  if (a < FLING_MIN_DELTA || b < FLING_MIN_DELTA) return null;
+  return b / a;
 }
 
 // 開いている行は常に1つだけ。別の行で横スワイプが始まったら前の行を閉じる。
@@ -229,12 +231,19 @@ export default function SwipeRow({
   const wheelEngagedRef = useRef(false);
   // 最後に wheel が届いた時刻。速度をどれだけ信用するかの判断に使う。
   const wheelLastEventTRef = useRef(0);
-  // 直近の deltaX の並び。「指を離した後の慣性」かどうかの見分けに使う。
-  const wheelDeltasRef = useRef<number[]>([]);
+  // 「指を離した後の慣性」の見分け用。直前の deltaX と、小さくなり続けている
+  // 区間の始まり（時刻・イベント数）。
+  const wheelLastDeltaRef = useRef(0);
+  const wheelShrinkStartRef = useRef(0);
+  const wheelShrinkCountRef = useRef(0);
+  // 「慣性かもしれない」区間で、まだ行へ反映していない移動量。
+  // 慣性と確定したら捨て（＝指を離した位置から戻り始める）、人の指だったと
+  // 分かったら、そのぶんをまとめて反映して追いつかせる。
+  const wheelHeldRef = useRef(0);
   // 慣性とみなして入力を捨てている最中か（＝指はもう離れている、という想定）。
   const wheelFlingRef = useRef(false);
   // 追従ループから「操作終了→スナップ」を呼ぶための控え（定義は後段）。
-  const endWheelGestureRef = useRef<() => void>(() => {});
+  const endWheelGestureRef = useRef<(fling?: boolean) => void>(() => {});
   const wheelBaseRef = useRef(0); // wheel ジェスチャー開始時の位置（反対側へ越えさせない判定用）
   // wheel は「差分」でしか届かないので、生の積算値と、それに壁/抵抗を適用した
   // 目標値を分けて持つ。減衰後の値を次の計算に入れ直すと抵抗が二重三重に掛かり、
@@ -338,15 +347,26 @@ export default function SwipeRow({
     rowRef.current?.classList.toggle("flow-swipe-active", on);
   }, []);
 
+  // 慣性の見分けを最初の状態に戻す（別の操作として見直すとき）。
+  const resetFlingDetect = useCallback(() => {
+    wheelLastDeltaRef.current = 0;
+    wheelShrinkStartRef.current = 0;
+    wheelShrinkCountRef.current = 0;
+    wheelFlingRef.current = false;
+  }, []);
+
+  // 保留していた移動量を行へ反映する（＝指の動きだった場合の追いつき）。
+  // 定義は下（clampPosition などが要る）。ここは呼び出し用の控え。
+  const flushHeldRef = useRef<() => void>(() => {});
+
   // 入力が完全に途切れたときの後始末（保険）。慣性の見分けもここで初期化する。
   const armWheelIdle = useCallback(() => {
     if (wheelTimer.current) clearTimeout(wheelTimer.current);
     wheelTimer.current = setTimeout(() => {
-      wheelFlingRef.current = false;
-      wheelDeltasRef.current = [];
+      resetFlingDetect();
       endWheelGestureRef.current();
     }, WHEEL_IDLE_MS);
-  }, []);
+  }, [resetFlingDetect]);
 
   const cancelRaf = useCallback(() => {
     if (rafRef.current != null) {
@@ -405,6 +425,20 @@ export default function SwipeRow({
     }
     return next;
   }, []);
+
+  // 保留していた移動量（慣性かもしれないと様子を見ていたぶん）を行へ反映する。
+  const flushHeld = useCallback(() => {
+    if (wheelHeldRef.current === 0) return;
+    wheelRawRef.current = clampRawToWalls(
+      wheelRawRef.current + wheelHeldRef.current,
+      wheelBaseRef.current,
+    );
+    wheelHeldRef.current = 0;
+    const next = clampPosition(wheelRawRef.current, wheelBaseRef.current);
+    wheelTargetRef.current = next;
+    pushSample(next);
+  }, [clampPosition, clampRawToWalls, pushSample]);
+  flushHeldRef.current = flushHeld;
 
   // ドラッグ中の 1:1 追従。イベント内でそのまま transform を書く（rAF を挟むと
   // 次フレームまで書き込みが遅れて指から離れて見えるため挟まない。ブラウザは
@@ -498,7 +532,11 @@ export default function SwipeRow({
             v = 0;
           }
         }
-        if (Math.abs(x - target) < 0.5 && Math.abs(v) < 8) {
+        // 収束の打ち切り。最後の 1px 前後は、見た目には止まって見えるのに
+        // バネの計算だけが続く「尾」で、ここを厳しくすると（0.5px/8px･s など）
+        // 止まってから静止扱いになるまでに 70ms ほど余分にかかる。目で分から
+        // ない範囲まで緩めて、その尾を切る（残りは下で目標値へ合わせる）。
+        if (Math.abs(x - target) < 1.2 && Math.abs(v) < 60) {
           rafRef.current = null;
           offsetRef.current = target;
           restPosRef.current = target; // 確定は springTo 開始時。ここは念のため
@@ -532,7 +570,10 @@ export default function SwipeRow({
   // v=リリース直前の速度。距離と速度のハイブリッドで開閉を決め、その速度を
   // そのままバネの初速として渡す。
   // 開いていた状態からは反対側を出さず必ずリストへ戻す。
-  const settle = (base: number, pos: number, v: number) => {
+  // springV は「バネに渡す初速」。通常は v と同じだが、トラックパッドで慣性を
+  // 検知して終わらせる場合だけ、惰性で進んだぶんを差し引いて弱めた値が来る
+  // （開く/戻すの判定は、指の意図どおりになるよう v のままで行う）。
+  const settle = (base: number, pos: number, v: number, springV = v) => {
     const rowW = rowWidthRef.current;
     const wasZone = committingRef.current;
     committingRef.current = false;
@@ -544,7 +585,7 @@ export default function SwipeRow({
       const towardClose = openLeft ? pos - base : base - pos; // 閉じ方向へ動いた量(px)
       const flickClose = openLeft ? v > FLICK_VELOCITY : v < -FLICK_VELOCITY;
       const openPos = openLeft ? -openWidth : leadWidth;
-      springTo(towardClose > 20 || flickClose ? 0 : openPos, v);
+      springTo(towardClose > 20 || flickClose ? 0 : openPos, springV);
       return;
     }
 
@@ -560,7 +601,7 @@ export default function SwipeRow({
           pos >= rowW * LEAD_COMMIT_RATIO ||
           (v >= LEAD_COMMIT_VELOCITY && pos >= rowW * LEAD_COMMIT_MIN_RATIO))
       ) {
-        springTo(0, v); // 振り切り/フリック → 実行してスナップで戻す
+        springTo(0, springV); // 振り切り/フリック → 実行してスナップで戻す
         lead.onClick();
         return;
       }
@@ -568,14 +609,14 @@ export default function SwipeRow({
       if (v > FLICK_VELOCITY) target = leadWidth;
       else if (v < -FLICK_VELOCITY) target = 0;
       else target = pos >= leadWidth / 2 ? leadWidth : 0;
-      springTo(target, v);
+      springTo(target, springV);
       return;
     }
     let target: number;
     if (v < -FLICK_VELOCITY) target = -openWidth;
     else if (v > FLICK_VELOCITY) target = 0;
     else target = pos <= -openWidth / 2 ? -openWidth : 0;
-    springTo(target, v);
+    springTo(target, springV);
   };
   const settleRef = useRef(settle);
   settleRef.current = settle;
@@ -584,7 +625,10 @@ export default function SwipeRow({
   // どちらから呼ばれても同じ。二重に走らないよう、既に終了していれば何もしない）。
   // 速度は「最後に入力が届いた時点」の値なので、そこからの経過時間ぶん弱めてから
   // スナップ判定に渡す（止めた操作がフリック扱いになるのを防ぐ）。
-  const endWheelGesture = useCallback(() => {
+  // fling=true は「慣性を見つけて終わらせた」場合。指はすでに離れていて、
+  // 検知までの時間ぶん惰性で進んでしまっているので、バネへ渡す初速だけ弱める
+  // （惰性で進む＋満タンの勢いでバネ、と二重に効いて止まるまでが長くなるため）。
+  const endWheelGesture = useCallback((fling = false) => {
     if (!draggingRef.current && !wheelEngagedRef.current) return;
     if (wheelTimer.current) {
       clearTimeout(wheelTimer.current);
@@ -593,15 +637,21 @@ export default function SwipeRow({
     wheelAccum.current = 0;
     wheelEngagedRef.current = false;
     draggingRef.current = false;
+    // 様子見で溜めていたぶんの後始末。慣性なら「指を離した後の惰性」なので
+    // 捨てる。そうでなければ指の動きなので、最後に反映してから判定する。
+    if (fling) wheelHeldRef.current = 0;
+    else flushHeldRef.current();
     const age = performance.now() - wheelLastEventTRef.current;
     const decay = Math.max(0, 1 - age / WHEEL_VELOCITY_GRACE_MS);
+    const v = lastVelRef.current * decay;
     // 開始位置(base)を渡すことで、開いていた状態からのスクロールは必ずリストへ戻す。
     // 位置判定は補間の途中ではなく指示された到達点(target)で行う。バネの開始位置は
     // 表示中の offsetRef なので見た目は連続したまま。
     settleRef.current(
       wheelBaseRef.current,
       wheelTargetRef.current,
-      lastVelRef.current * decay,
+      v,
+      fling ? v * FLING_VELOCITY_SCALE : v,
     );
   }, []);
   endWheelGestureRef.current = endWheelGesture;
@@ -643,28 +693,55 @@ export default function SwipeRow({
       e.preventDefault();
 
       const now = performance.now();
+      const prevT = wheelLastEventTRef.current;
       // 前の入力から間が空いていたら、慣性の見分けは最初からやり直す
       // （別の操作なので、前の並びを引きずらせない）。
-      if (now - wheelLastEventTRef.current > WHEEL_IDLE_MS) {
-        wheelDeltasRef.current = [];
-        wheelFlingRef.current = false;
-      }
+      if (now - prevT > WHEEL_IDLE_MS) resetFlingDetect();
       wheelLastEventTRef.current = now;
-      wheelDeltasRef.current.push(e.deltaX);
-      if (wheelDeltasRef.current.length > FLING_WINDOW) {
-        wheelDeltasRef.current.shift();
+
+      // 直前のイベントと比べて「小さくなり続けている」かを見る。
+      const ratio = deltaRatio(e.deltaX, wheelLastDeltaRef.current);
+      const shrinking =
+        ratio !== null && ratio <= FLING_RATIO_MAX && ratio >= FLING_RATIO_MIN;
+      if (shrinking) {
+        if (wheelShrinkStartRef.current === 0) {
+          // 減り始めた「1つ前（＝いちばん速かった）」の時刻から数える。
+          wheelShrinkStartRef.current = prevT || now;
+          wheelShrinkCountRef.current = 1;
+        } else {
+          wheelShrinkCountRef.current += 1;
+        }
+      } else if (!wheelFlingRef.current) {
+        wheelShrinkStartRef.current = 0;
+        wheelShrinkCountRef.current = 0;
       }
 
       // 「指はもう離れている」とみなして慣性を捨てている最中。
-      // 規則正しさが崩れたら＝人が動かしているので、その場で操作へ戻す。
+      // 抜ける条件は「向きが変わった」か「急に大きくなった」＝人が触ったとき
+      // だけにする。慣性の終わりぎわは移動量がとても小さくなるので、そこを
+      // 「慣性ではない」と扱うと、消えかけの惰性で行がまた動き出してしまう。
       if (wheelFlingRef.current) {
-        if (looksLikeFling(wheelDeltasRef.current)) {
+        const prevDelta = wheelLastDeltaRef.current;
+        const grew =
+          prevDelta !== 0 &&
+          (Math.sign(e.deltaX) !== Math.sign(prevDelta) ||
+            Math.abs(e.deltaX) > Math.abs(prevDelta) * FLING_KEEP_RATIO_MAX + 1);
+        wheelLastDeltaRef.current = e.deltaX;
+        if (!grew) {
           armWheelIdle();
           return;
         }
-        wheelFlingRef.current = false;
-        wheelDeltasRef.current = [e.deltaX]; // 見分けはやり直し
+        resetFlingDetect(); // 人が触った → 見分けをやり直して操作へ戻す
+        wheelLastDeltaRef.current = e.deltaX;
+      } else {
+        wheelLastDeltaRef.current = e.deltaX;
       }
+
+      // 小さくなり続けている時間が十分に続いたら、指はもう離れている。
+      const isFling =
+        wheelShrinkStartRef.current > 0 &&
+        wheelShrinkCountRef.current >= FLING_MIN_EVENTS &&
+        now - wheelShrinkStartRef.current >= FLING_DECAY_MS;
 
       wheelAccum.current += e.deltaX;
       // 一度始まったジェスチャーは、途切れる（idle）まで始まったままにする。
@@ -686,33 +763,45 @@ export default function SwipeRow({
           wheelBaseRef.current = restPosRef.current; // ルール判定の基準＝静止位置
           wheelRawRef.current = offsetRef.current; // 生の積算はここから
           wheelTargetRef.current = offsetRef.current;
+          wheelHeldRef.current = 0; // 前のジェスチャーの溜めを持ち越さない
           rowWidthRef.current = rowRef.current?.offsetWidth ?? 0;
           screenWidthRef.current = window.innerWidth || rowWidthRef.current;
           resetSamples(offsetRef.current);
           setActive(true);
           startWheelLoop();
         }
-        // 生の積算値に足し込み、壁と抵抗は「生の値」に対して一度だけ適用する。
-        // （減衰後の位置に足し込むと抵抗が重ねがけになり、スクロールしても
-        //   進まない＝カクついて見える）
-        wheelRawRef.current -= e.deltaX * WHEEL_SENSITIVITY;
-        wheelRawRef.current = clampRawToWalls(
-          wheelRawRef.current,
-          wheelBaseRef.current,
-        );
-        const next = clampPosition(wheelRawRef.current, wheelBaseRef.current);
-        wheelTargetRef.current = next;
-        pushSample(next); // touch と同じ方式で速度を計測（フリック判定用）
+        // 移動量が小さくなり続けている（＝指を離した直後かもしれない）間は、
+        // まだ行を動かさずに溜めておく。慣性だと確定したらこの溜めは捨てるので、
+        // 行は「指を離した位置」から戻り始められる。溜めずに動かしてしまうと、
+        // 慣性と分かるまでの間に行が余計に伸び、そのぶんバネの戻りも長くなる
+        // （＝離してから止まるまでが目に見えて延びる）。
+        // 指の動きだった場合は、崩れた時点でまとめて反映して追いつかせる。
+        const rawDelta = -e.deltaX * WHEEL_SENSITIVITY;
+        if (wheelShrinkCountRef.current >= 2) {
+          wheelHeldRef.current += rawDelta;
+        } else {
+          // 生の積算値に足し込み、壁と抵抗は「生の値」に対して一度だけ適用する。
+          // （減衰後の位置に足し込むと抵抗が重ねがけになり、スクロールしても
+          //   進まない＝カクついて見える）
+          wheelRawRef.current = clampRawToWalls(
+            wheelRawRef.current + rawDelta + wheelHeldRef.current,
+            wheelBaseRef.current,
+          );
+          wheelHeldRef.current = 0;
+          const next = clampPosition(wheelRawRef.current, wheelBaseRef.current);
+          wheelTargetRef.current = next;
+          pushSample(next); // touch と同じ方式で速度を計測（フリック判定用）
+        }
 
         // ここから慣性＝指が離れた、と見えたら touchend と同じ処理へ。
         // このイベントぶんまでは反映してから終わる（離す直前の動きを捨てない）。
-        if (looksLikeFling(wheelDeltasRef.current)) {
+        if (isFling) {
           wheelFlingRef.current = true;
-          endWheelGestureRef.current();
+          endWheelGestureRef.current(true);
           armWheelIdle();
           return;
         }
-      } else if (looksLikeFling(wheelDeltasRef.current)) {
+      } else if (isFling) {
         // まだ行が動き出していない段階での慣性。指はもう離れているので、
         // 惰性だけで行が開き始めないように捨てる。
         wheelFlingRef.current = true;
@@ -742,6 +831,7 @@ export default function SwipeRow({
     resetSamples,
     clampRawToWalls,
     armWheelIdle,
+    resetFlingDetect,
   ]);
 
   if (!isTouch || disabled || (actions.length === 0 && !leadingAction)) {
