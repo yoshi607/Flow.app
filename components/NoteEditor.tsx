@@ -258,6 +258,13 @@ export default function NoteEditor({
         void insertImages(files);
         return true;
       },
+      // コピーした時のプレーンテキスト化。1行=1段落（<p>）で保存しているため、
+      // ProseMirRORの既定（段落間を空行 "\n\n" で連結）のままだと、
+      // 他アプリへ貼り付けたときに全行の間に空行が入ってしまう。
+      // 段落間を "\n" 1つで連結するようにし、ユーザーが実際に空行を
+      // 入れた（空の段落がある）場合だけ結果的に空行になるようにする。
+      clipboardTextSerializer: (slice) =>
+        slice.content.textBetween(0, slice.content.size, "\n"),
     },
     onUpdate: ({ editor }) => {
       updateNote(note.id, { body: editor.getHTML() });
