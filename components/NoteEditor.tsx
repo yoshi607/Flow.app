@@ -22,6 +22,7 @@ import { toEditorHtml, toAppendedParagraphs } from "@/lib/richtext";
 import { TranscriptCallout } from "@/lib/tiptap/transcriptCallout";
 import { Sketch } from "@/lib/tiptap/sketch";
 import { ImageBlock } from "@/lib/tiptap/imageBlock";
+import { HorizontalRule } from "@/lib/tiptap/horizontalRule";
 import { compressImage } from "@/lib/images/compress";
 import { downloadNoteAsPng } from "@/lib/exportImage";
 import { useClosingPanel } from "@/lib/useClosingPanel";
@@ -218,7 +219,11 @@ export default function NoteEditor({
         // Backspace / Delete でリストの項目をきれいに繋げるためのキー操作。
         // 番号付きリストが無くても安全に動く（登録されていないリストは読み飛ばす）。
         listKeymap: {},
+        // 標準の区切り線は無効化し、下の HorizontalRule（Backspaceの挙動を
+        // 修正したもの）に差し替える
+        horizontalRule: false,
       }),
+      HorizontalRule,
       TranscriptCallout,
       // 描画中は editor.setEditable(false) でエディタごと編集不可にするため、
       // ブロック側は editor.isEditable ではなくこの値で判定する
