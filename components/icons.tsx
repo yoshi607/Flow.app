@@ -113,6 +113,18 @@ export const IconUnderline = ({ className = base }: P) => (
   </svg>
 );
 
+export const IconStrikethrough = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M4 12h16M7 6.5C7 4.6 9 4 12 4s5 1 5 3-2 2.5-5 3M9 17.5c0 1.9 1.5 2.5 3 2.5s5-.6 5-2.5-2-2.5-5-3" />
+  </svg>
+);
+
+export const IconCode = ({ className = base }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 6l-6 6 6 6M15 6l6 6-6 6" />
+  </svg>
+);
+
 export const IconHeading1 = ({ className = base }: P) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 5v14M11 5v14M3 12h8M17 19V9l-3 2" />

@@ -6,6 +6,8 @@ import {
   IconBold,
   IconItalic,
   IconUnderline,
+  IconStrikethrough,
+  IconCode,
   IconHeading1,
   IconHeading2,
   IconHeading3,
@@ -136,6 +138,32 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
           }`}
         >
           <IconUnderline className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+          title="取り消し線 (Ctrl/Cmd+Shift+X)"
+          className={`rounded-lg p-1.5 transition ${
+            editor.isActive("strike")
+              ? "bg-brand-200 text-brand-700"
+              : "text-neutral-500 hover:bg-brand-100"
+          }`}
+        >
+          <IconStrikethrough className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => editor.chain().focus().toggleCode().run()}
+          title="等幅 (Ctrl/Cmd+E)"
+          className={`rounded-lg p-1.5 transition ${
+            editor.isActive("code")
+              ? "bg-brand-200 text-brand-700"
+              : "text-neutral-500 hover:bg-brand-100"
+          }`}
+        >
+          <IconCode className="h-4 w-4" />
         </button>
       </div>
 

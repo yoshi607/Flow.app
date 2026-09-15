@@ -200,8 +200,7 @@ export default function NoteEditor({
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         link: false,
-        strike: false,
-        code: false,
+        // ネイティブ版が書き出す装飾。無効にすると Web版で編集した時点で落ちるため有効にする
         codeBlock: false,
         blockquote: false,
         // 区切り線は有効。行頭で --- と入力すると入る（StarterKit の入力ルール）。

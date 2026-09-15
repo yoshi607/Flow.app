@@ -110,6 +110,10 @@ body {
   top: 0;
   @apply text-neutral-500;
 }
+.ProseMirror code {
+  @apply rounded bg-brand-100 px-1 py-0.5;
+  font-size: 0.9em;
+}
 /* li の中は段落（<p>）なので、行間が空きすぎないよう下余白を詰める */
 .ProseMirror ul li > p {
   margin-bottom: 0.15em;
