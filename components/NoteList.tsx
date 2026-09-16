@@ -10,6 +10,7 @@ import {
   shortNoteRemainingDays,
   trashRemainingDays,
   shareNote,
+  isNoteLocked,
 } from "@/lib/utils";
 import { type View } from "./Sidebar";
 import SwipeRow, { type SwipeAction } from "./SwipeRow";
@@ -24,6 +25,7 @@ import {
   IconArchive,
   IconTrash,
   IconRestore,
+  IconMic,
 } from "./icons";
 
 function Countdown({ note }: { note: Note }) {
@@ -46,6 +48,17 @@ function Countdown({ note }: { note: Note }) {
     );
   }
   return null;
+}
+
+// 録音中バッジ：ネイティブ版がこのメモで録音中（ロック中）のときだけ出す
+function RecordingBadge({ note }: { note: Note }) {
+  if (!isNoteLocked(note)) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+      <IconMic className="h-2.5 w-2.5" />
+      録音中
+    </span>
+  );
 }
 
 // ＋ボタン：タップで外側へ広がるリングを一度だけ再生してから onCreate を呼ぶ。
@@ -313,6 +326,7 @@ export default function NoteList({
                     #{t}
                   </span>
                 ))}
+                <RecordingBadge note={note} />
                 <Countdown note={note} />
               </div>
             </button>

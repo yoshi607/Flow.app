@@ -20,6 +20,7 @@ import {
   MIN_SHORT_NOTE_DAYS,
   MAX_SHORT_NOTE_DAYS,
 } from "@/lib/types";
+import { isNoteLocked } from "@/lib/utils";
 
 interface NotesContextValue {
   notes: Note[];
@@ -155,6 +156,52 @@ export function NotesProvider({
     };
   }, [refresh]);
 
+  // ローカル状態を1件更新。touch=false のときは編集日時(updated_at)を据え置く
+  // （ピン留めなど、内容の編集ではない操作向け）。
+  const patchLocal = useCallback(
+    (id: string, patch: Partial<Note>, touch = true) => {
+      lastEditedAt.current[id] = Date.now();
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === id
+            ? {
+                ...n,
+                ...patch,
+                ...(touch ? { updated_at: new Date().toISOString() } : {}),
+              }
+            : n,
+        ),
+      );
+    },
+    [],
+  );
+
+  // DB へ保存（デバウンスされた差分をまとめて）
+  const flushSave = useCallback(
+    async (id: string) => {
+      const patch = pendingPatches.current[id];
+      delete pendingPatches.current[id];
+      if (!patch || Object.keys(patch).length === 0) return;
+      savingIds.current.add(id);
+      let error: { message: string } | null = null;
+      try {
+        ({ error } = await supabase.from("notes").update(patch).eq("id", id));
+      } catch (e) {
+        // オフライン等で fetch 自体が失敗した場合
+        error = { message: e instanceof Error ? e.message : "通信エラー" };
+      }
+      savingIds.current.delete(id);
+      if (error) {
+        console.error("保存に失敗:", error.message);
+        // 失敗した差分は捨てずに再キューし、次の編集・オンライン復帰・
+        // アプリ非表示時の flush で再送する。保存待ちの間により新しい編集が
+        // 入っていた場合はそちらを優先してマージする。
+        pendingPatches.current[id] = { ...patch, ...pendingPatches.current[id] };
+      }
+    },
+    [supabase],
+  );
+
   // メモのリアルタイム購読（他デバイスの変更を反映）。
   // folders は別チャンネルにする（下）。1つのチャンネルに複数の
   // postgres_changes を相乗りさせると、2つ目の購読（＝folders）にイベントが
@@ -176,8 +223,31 @@ export function NotesProvider({
           }
           const row = payload.new as Note;
           // 自分が編集中・保存直後・未保存の差分が残っているノートは
-          // ローカルを優先し上書きしない
-          if (keepLocal(row.id)) return;
+          // ローカルを優先し上書きしない。
+          // ただし、ネイティブ版が録音を始めてロックが付いた場合だけは例外。
+          // 書きかけを即座に保存してから（他人の編集を消さないため）、
+          // ロック状態だけをローカルへ反映して編集不可へ切り替える。
+          if (keepLocal(row.id)) {
+            if (isNoteLocked(row)) {
+              if (saveTimers.current[row.id]) {
+                clearTimeout(saveTimers.current[row.id]);
+                delete saveTimers.current[row.id];
+              }
+              if (pendingPatches.current[row.id]) void flushSave(row.id);
+              setNotes((prev) =>
+                prev.map((n) =>
+                  n.id === row.id
+                    ? {
+                        ...n,
+                        recording_lock_by: row.recording_lock_by,
+                        recording_lock_until: row.recording_lock_until,
+                      }
+                    : n,
+                ),
+              );
+            }
+            return;
+          }
           setNotes((prev) => {
             const idx = prev.findIndex((x) => x.id === row.id);
             if (idx === -1) return [row, ...prev];
@@ -200,7 +270,7 @@ export function NotesProvider({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, userId, refresh, keepLocal]);
+  }, [supabase, userId, refresh, keepLocal, flushSave]);
 
   // フォルダのリアルタイム購読（専用チャンネル）。上のメモとは分けることで、
   // 相乗りによる配信漏れを避け、作成・名前変更・削除・並べ替えを全端末へ
@@ -279,52 +349,6 @@ export function NotesProvider({
     };
   }, [supabase, userId]);
 
-  // ローカル状態を1件更新。touch=false のときは編集日時(updated_at)を据え置く
-  // （ピン留めなど、内容の編集ではない操作向け）。
-  const patchLocal = useCallback(
-    (id: string, patch: Partial<Note>, touch = true) => {
-      lastEditedAt.current[id] = Date.now();
-      setNotes((prev) =>
-        prev.map((n) =>
-          n.id === id
-            ? {
-                ...n,
-                ...patch,
-                ...(touch ? { updated_at: new Date().toISOString() } : {}),
-              }
-            : n,
-        ),
-      );
-    },
-    [],
-  );
-
-  // DB へ保存（デバウンスされた差分をまとめて）
-  const flushSave = useCallback(
-    async (id: string) => {
-      const patch = pendingPatches.current[id];
-      delete pendingPatches.current[id];
-      if (!patch || Object.keys(patch).length === 0) return;
-      savingIds.current.add(id);
-      let error: { message: string } | null = null;
-      try {
-        ({ error } = await supabase.from("notes").update(patch).eq("id", id));
-      } catch (e) {
-        // オフライン等で fetch 自体が失敗した場合
-        error = { message: e instanceof Error ? e.message : "通信エラー" };
-      }
-      savingIds.current.delete(id);
-      if (error) {
-        console.error("保存に失敗:", error.message);
-        // 失敗した差分は捨てずに再キューし、次の編集・オンライン復帰・
-        // アプリ非表示時の flush で再送する。保存待ちの間により新しい編集が
-        // 入っていた場合はそちらを優先してマージする。
-        pendingPatches.current[id] = { ...patch, ...pendingPatches.current[id] };
-      }
-    },
-    [supabase],
-  );
-
   // 保存待ちの差分を全て即時保存する。
   // 350ms のデバウンス待ちの間にアプリを閉じたり切り替えたりすると
   // （特に iOS はバックグラウンドでタイマーが止まる）最後の入力が
@@ -357,8 +381,13 @@ export function NotesProvider({
 
   const updateNote = useCallback(
     (id: string, patch: Partial<Note>, immediate = false, touch = true) => {
-      patchLocal(id, patch, touch);
-      pendingPatches.current[id] = { ...pendingPatches.current[id], ...patch };
+      // 録音ロックの2カラムはネイティブ版だけが書き込む取り決め。
+      // Web側の保存経路（updateNoteが唯一の入口）からは絶対に送らない。
+      const { recording_lock_by, recording_lock_until, ...safePatch } = patch;
+      void recording_lock_by;
+      void recording_lock_until;
+      patchLocal(id, safePatch, touch);
+      pendingPatches.current[id] = { ...pendingPatches.current[id], ...safePatch };
       if (saveTimers.current[id]) clearTimeout(saveTimers.current[id]);
       if (immediate) {
         flushSave(id);

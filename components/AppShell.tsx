@@ -12,7 +12,7 @@ import dynamic from "next/dynamic";
 import { useNotes } from "@/lib/store";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { type Note } from "@/lib/types";
-import { stripHtml } from "@/lib/utils";
+import { stripHtml, isNoteLocked } from "@/lib/utils";
 import Sidebar, { type View } from "./Sidebar";
 import NoteList from "./NoteList";
 
@@ -707,6 +707,15 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           selectedId={selectedId}
           onQueryChange={setQuery}
           onSelect={(id) => {
+            // 録音中（ロック中）のメモは開かせない。取り決め上、Web版は
+            // ロックを見て従うだけで、誰のロックかに関わらず編集を控える。
+            const note = notes.find((n) => n.id === id);
+            if (note && isNoteLocked(note)) {
+              window.alert(
+                "他の端末で録音中です。録音が終わると開けるようになります\n（相手のアプリが落ちた場合も、1分ほどで開けます）",
+              );
+              return;
+            }
             setSelectedId(id);
             // ドック中（左が狭い）はメモを選んだらフォルダ一覧を畳んで本文を出す
             if (dockedNote) setSidebarCollapsed(true);

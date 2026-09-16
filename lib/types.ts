@@ -25,6 +25,9 @@ export interface Note {
   trashed_at: string | null;
   created_at: string;
   updated_at: string;
+  // ネイティブ版が録音中にセットするロック（Web版は読んで従うだけ。書き込まない）
+  recording_lock_by: string | null;
+  recording_lock_until: string | null;
 }
 
 export interface Attachment {

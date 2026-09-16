@@ -17,7 +17,7 @@ import { useNotes } from "@/lib/store";
 import { useDevice } from "@/lib/useDevice";
 import { createClient } from "@/lib/supabase/client";
 import { type Note, type Attachment } from "@/lib/types";
-import { shortNoteRemainingDays, trashRemainingDays, formatFileSize, shareNote } from "@/lib/utils";
+import { shortNoteRemainingDays, trashRemainingDays, formatFileSize, shareNote, isNoteLocked } from "@/lib/utils";
 import { toEditorHtml, toAppendedParagraphs } from "@/lib/richtext";
 import { TranscriptCallout } from "@/lib/tiptap/transcriptCallout";
 import { Sketch } from "@/lib/tiptap/sketch";
@@ -156,6 +156,9 @@ export default function NoteEditor({
   const sessionRef = useRef<string | null>(null);
 
   const trashed = note.status === "trashed";
+  // ネイティブ版が録音中にセットするロック。Web版は読んで従うだけで、
+  // このロックを自分で取ることはない（updateNote 側で2カラムは常に除外する）。
+  const locked = isNoteLocked(note);
   const tags = note.tags ?? [];
 
   // 短期メモの残り日数バッジ。3分割（md かつ全画面でない）では出さず、
@@ -274,6 +277,17 @@ export default function NoteEditor({
       updateNote(note.id, { body: editor.getHTML() });
     },
   });
+
+  // 開いたまま録音ロックが付いた（＝ネイティブ版が録音を始めた）場合に、
+  // このエディタインスタンスを再生成せず編集不可へ切り替える。
+  // （trashed は本来ここで閉じられるため今までは不要だったが、ロックは
+  // 開いたまま切り替わるのでこの effect が要る）
+  useEffect(() => {
+    if (!editor) return;
+    // 手書きの描画モード中は編集不可を上書きしない（巻き込まないよう触らない）
+    if (!editor.isEditable && !trashed && !locked) return;
+    editor.setEditable(!trashed && !locked);
+  }, [editor, trashed, locked]);
 
   // リモート（他端末）での本文変更を、開いたままのエディタへ流し込む。
   // 単一ユーザーの複数端末を想定した軽量同期（last-writer-wins）。
@@ -563,7 +577,7 @@ export default function NoteEditor({
 
         <div className="flex-1" />
 
-        {!trashed && (
+        {!trashed && !locked && (
           <>
             {/* 書式（Aa）：下の書式ツールバーの表示を切り替える */}
             <button
@@ -770,7 +784,7 @@ export default function NoteEditor({
         />
       )}
 
-      {/* 短期/長期トグル or ゴミ箱バナー */}
+      {/* 短期/長期トグル or ゴミ箱バナー or 録音ロックバナー */}
       {trashed ? (
         <div className="flex flex-wrap items-center gap-3 border-b border-brand-200/60 bg-red-50 px-4 py-2 text-sm">
           <span className="text-red-700">
@@ -797,10 +811,16 @@ export default function NoteEditor({
             完全に削除
           </button>
         </div>
+      ) : locked ? (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-brand-200/60 bg-red-50 px-4 py-2 text-sm text-red-700">
+          <IconMic className="h-4 w-4 shrink-0" />
+          他の端末で録音中です。録音が終わると編集できるようになります
+          （相手のアプリが落ちた場合も、1分ほどで編集できます）
+        </div>
       ) : null}
 
       {/* タグ */}
-      {!trashed && (
+      {!trashed && !locked && (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-brand-200/60 px-4 py-2">
           {tags.map((t) => (
             <span
@@ -838,7 +858,7 @@ export default function NoteEditor({
       {/* タイトル */}
       <input
         value={note.title}
-        readOnly={trashed}
+        readOnly={trashed || locked}
         onChange={(e) => updateNote(note.id, { title: e.target.value })}
         placeholder="タイトル"
         className="bg-transparent px-4 pt-4 text-2xl font-semibold tracking-tight outline-none placeholder:text-neutral-300"
@@ -854,7 +874,7 @@ export default function NoteEditor({
             <AttachmentItem
               key={a.id}
               attachment={a}
-              trashed={trashed}
+              trashed={trashed || locked}
               onDelete={() => handleDeleteAttachment(a)}
             />
           ))}

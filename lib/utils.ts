@@ -1,4 +1,4 @@
-import { TRASH_RETENTION_DAYS } from "./types";
+import { TRASH_RETENTION_DAYS, type Note } from "./types";
 
 // 残り日数を計算（切り上げ）。過去なら 0。
 export function daysUntil(dateStr: string | null): number | null {
@@ -86,6 +86,14 @@ export async function shareNote(title: string, body: string): Promise<void> {
   } catch {
     window.alert("共有・コピーに対応していません");
   }
+}
+
+// 録音ロック中か（ネイティブ版が録音中にセットする。Web版は読んで従うだけ）
+// recording_lock_until が未来で、recording_lock_by が入っていればロック中。
+// 2カラムがまだ無い環境（undefined）や null でも安全に「ロックされていない」扱いにする。
+export function isNoteLocked(note: Pick<Note, "recording_lock_by" | "recording_lock_until">): boolean {
+  if (!note.recording_lock_by || !note.recording_lock_until) return false;
+  return new Date(note.recording_lock_until).getTime() > Date.now();
 }
 
 // 添付ファイルのサイズ表示（例: 1.2 MB）
