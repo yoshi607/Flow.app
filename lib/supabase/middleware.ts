@@ -3,6 +3,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
+// 通信失敗・サーバー側の一時障害など、「ログアウトした」ことを意味しないエラーか
+function isTransientAuthError(error: { name?: string; status?: number }) {
+  return (
+    error.name === "AuthRetryableFetchError" ||
+    (typeof error.status === "number" && error.status >= 500)
+  );
+}
+
 // 各リクエストで Supabase セッションを更新し、未ログインなら /login へ誘導する
 export async function updateSession(request: NextRequest) {
   let cookiesToSetLater: CookieToSet[] = [];
@@ -26,8 +34,37 @@ export async function updateSession(request: NextRequest) {
   );
 
   const {
-    data: { user },
+    data: { user: verifiedUser },
+    error: userError,
   } = await supabase.auth.getUser();
+  let user = verifiedUser;
+
+  // 【重要】通信の一時的な失敗（電波が弱い・タイムアウト・Supabase側の一時障害）を
+  // 「未ログイン」と取り違えない。取り違えると、スマホで電波が不安定なだけで
+  // 保存済みのログインが生きていても毎回 /login に飛ばされてしまう。
+  // 一時的な失敗のときは、Cookie に残っているセッションをそのまま信用する
+  // （データ取得は下流で JWT 検証＋RLS が行うので、安全性は変わらない）。
+  if (!user && userError && isTransientAuthError(userError)) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    user = session?.user ?? null;
+
+    if (!user) {
+      // セッションの有無すら確認できない＝ログイン状態を判断できないので、
+      // ログアウト扱いにせず「接続できない」と返す（Cookie は消さない）。
+      return new NextResponse(
+        "接続できませんでした。電波の良いところで、もう一度開いてください。",
+        {
+          status: 503,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+  }
 
   const path = request.nextUrl.pathname;
   const isAuthRoute =
