@@ -286,7 +286,10 @@ export default function NoteEditor({
     if (!editor) return;
     // 手書きの描画モード中は編集不可を上書きしない（巻き込まないよう触らない）
     if (!editor.isEditable && !trashed && !locked) return;
-    editor.setEditable(!trashed && !locked);
+    // 【重要】第2引数 false を必ず付ける。省略すると Tiptap は "update" を発火し、
+    // onUpdate → updateNote が走って、メモを開いただけで本文が保存され
+    // 編集日時が更新される（一覧の一番上に来てしまう）。
+    editor.setEditable(!trashed && !locked, false);
   }, [editor, trashed, locked]);
 
   // リモート（他端末）での本文変更を、開いたままのエディタへ流し込む。
