@@ -99,7 +99,7 @@ function CreateButton({ onCreate }: { onCreate: (origin: DOMRect) => void }) {
 export type ShortSort = "default" | "created" | "edited" | "expiry";
 
 const SHORT_SORT_OPTIONS: { value: ShortSort; label: string }[] = [
-  { value: "default", label: "標準（編集が新しい順）" },
+  { value: "default", label: "編集日時（新しい順）" },
   { value: "created", label: "作成日時（古い順）" },
   { value: "edited", label: "編集日時（古い順）" },
   { value: "expiry", label: "消去が近い順" },
