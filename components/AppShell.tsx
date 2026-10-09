@@ -33,7 +33,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
   const { notes, folders, loading, createNote, trashNote, deleteNotePermanently } =
     useNotes();
 
-  const [view, setView] = useState<View>({ type: "all" });
+  // 起動時は短期メモを最初に表示する
+  const [view, setView] = useState<View>({ type: "short" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
