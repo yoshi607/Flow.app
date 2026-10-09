@@ -14,7 +14,7 @@ import { useMediaQuery } from "@/lib/useMediaQuery";
 import { type Note } from "@/lib/types";
 import { stripHtml, isNoteLocked } from "@/lib/utils";
 import Sidebar, { type View } from "./Sidebar";
-import NoteList from "./NoteList";
+import NoteList, { type ShortSort } from "./NoteList";
 
 // 本文エディタは Tiptap 一式・手書き・画像書き出しを連れてくるため重い。
 // 起動時（メモ未選択）は不要なので、初期JSから切り離して遅延読み込みする。
@@ -35,6 +35,20 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
 
   // 起動時は短期メモを最初に表示する
   const [view, setView] = useState<View>({ type: "short" });
+  // 短期メモの並び順（短期メモ一覧だけで使う）。端末ごとに覚えておく
+  const [shortSort, setShortSortState] = useState<ShortSort>("default");
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("flow.shortSort");
+      if (v === "created" || v === "edited" || v === "expiry") setShortSortState(v);
+    } catch {}
+  }, []);
+  function setShortSort(v: ShortSort) {
+    setShortSortState(v);
+    try {
+      localStorage.setItem("flow.shortSort", v);
+    } catch {}
+  }
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -351,14 +365,23 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
       list = notes.filter((n) => n.status === "active");
     }
 
+    // 短期メモ一覧だけ、選んだ並び順（すべて昇順）。検索中は通常の順にする
+    const key =
+      !q && view.type === "short" && shortSort !== "default" ? shortSort : null;
+    const time = (iso: string | null) =>
+      iso ? new Date(iso).getTime() : Number.POSITIVE_INFINITY;
+
     // ピン留め優先 → 更新日時の新しい順
     return [...list].sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      if (key === "created") return time(a.created_at) - time(b.created_at);
+      if (key === "edited") return time(a.updated_at) - time(b.updated_at);
+      if (key === "expiry") return time(a.expires_at) - time(b.expires_at);
       return (
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
     });
-  }, [notes, folders, view, query]);
+  }, [notes, folders, view, query, shortSort]);
 
   const selectedNote = notes.find((n) => n.id === selectedId) ?? null;
   const dockedNote = notes.find((n) => n.id === dockedId) ?? null;
@@ -705,6 +728,8 @@ export default function AppShell({ userEmail }: { userEmail: string }) {
           loading={loading}
           view={view}
           query={query}
+          shortSort={shortSort}
+          onShortSortChange={setShortSort}
           selectedId={selectedId}
           onQueryChange={setQuery}
           onSelect={(id) => {

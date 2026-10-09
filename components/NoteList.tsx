@@ -26,6 +26,7 @@ import {
   IconTrash,
   IconRestore,
   IconMic,
+  IconSort,
 } from "./icons";
 
 function Countdown({ note }: { note: Note }) {
@@ -94,11 +95,23 @@ function CreateButton({ onCreate }: { onCreate: (origin: DOMRect) => void }) {
   );
 }
 
+// 短期メモの並び順。default 以外はすべて昇順（古い順・消去が近い順）
+export type ShortSort = "default" | "created" | "edited" | "expiry";
+
+const SHORT_SORT_OPTIONS: { value: ShortSort; label: string }[] = [
+  { value: "default", label: "標準（編集が新しい順）" },
+  { value: "created", label: "作成日時（古い順）" },
+  { value: "edited", label: "編集日時（古い順）" },
+  { value: "expiry", label: "消去が近い順" },
+];
+
 export default function NoteList({
   notes,
   loading,
   view,
   query,
+  shortSort = "default",
+  onShortSortChange,
   selectedId,
   onQueryChange,
   onSelect,
@@ -113,6 +126,8 @@ export default function NoteList({
   loading: boolean;
   view: View;
   query: string;
+  shortSort?: ShortSort;
+  onShortSortChange?: (v: ShortSort) => void;
   selectedId: string | null;
   onQueryChange: (q: string) => void;
   onSelect: (id: string) => void;
@@ -130,6 +145,8 @@ export default function NoteList({
     useNotes();
   // 「移動」対象のメモ（フォルダ選択シートを開く）
   const [movingNote, setMovingNote] = useState<Note | null>(null);
+  // 短期メモの並び替えメニューの開閉
+  const [sortOpen, setSortOpen] = useState(false);
 
   // 各メモの左スワイプアクションを組み立てる（⑥）
   function actionsFor(note: Note): SwipeAction[] {
@@ -249,7 +266,48 @@ export default function NoteList({
             </button>
           )
         ) : (
-          <CreateButton onCreate={onCreate} />
+          <>
+            {view.type === "short" && onShortSortChange && (
+              <div className="relative">
+                <button
+                  onClick={() => setSortOpen((o) => !o)}
+                  title="並び替え"
+                  className={`flow-press rounded-lg p-2 hover:bg-brand-100 ${
+                    shortSort !== "default" ? "text-brand-600" : ""
+                  }`}
+                >
+                  <IconSort />
+                </button>
+                {sortOpen && (
+                  <>
+                    {/* 外側タップで閉じる */}
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setSortOpen(false)}
+                    />
+                    <div className="absolute right-0 top-full z-40 mt-1 w-56 overflow-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-lg">
+                      {SHORT_SORT_OPTIONS.map((o) => (
+                        <button
+                          key={o.value}
+                          onClick={() => {
+                            onShortSortChange(o.value);
+                            setSortOpen(false);
+                          }}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-brand-100"
+                        >
+                          {o.label}
+                          {shortSort === o.value && (
+                            <span className="text-brand-600">✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            <CreateButton onCreate={onCreate} />
+          </>
         )}
       </div>
 
